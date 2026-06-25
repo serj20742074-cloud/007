@@ -1,0 +1,6 @@
+{
+  "name": "ControlCenter",
+  "description": "Автоматизированное рабочее место руководителя отдела центра для контроля исполнения поручений, документов, мероприятий, совещаний и исполнительской дисциплины станций.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
