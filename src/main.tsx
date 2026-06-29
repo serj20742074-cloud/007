@@ -12,7 +12,7 @@ createRoot(document.getElementById('root')!).render(
 // Register service worker for offline capabilities
 if ('serviceWorker' in navigator && !window.location.hostname.includes('localhost')) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+    navigator.serviceWorker.register('sw.js')
       .then(reg => {
         console.log('ControlCenter: Offline ServiceWorker registered successfully', reg.scope);
       })

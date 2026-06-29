@@ -2,10 +2,10 @@ const CACHE_NAME = "controlcenter-offline-v1";
 
 // List of static root resources to cache immediately during service worker install
 const PRECACHE_ASSETS = [
-  "/",
-  "/index.html",
-  "/manifest.json",
-  "/assets/icon_pwa.png"
+  "./",
+  "index.html",
+  "manifest.json",
+  "assets/icon_pwa.png"
 ];
 
 self.addEventListener("install", (event) => {
@@ -71,7 +71,7 @@ self.addEventListener("fetch", (event) => {
         .catch(() => {
           // If offline and request is for navigation (HTML document), serve the cached root
           if (event.request.mode === "navigate") {
-            return caches.match("/");
+            return caches.match("./") || caches.match("index.html");
           }
         });
     })
