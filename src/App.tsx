@@ -559,6 +559,7 @@ export default function App() {
         {activeTab === "reports" && (
           <ReportsView 
             db={db}
+            onNavigateToTask={navigateToSpecificTask}
           />
         )}
 

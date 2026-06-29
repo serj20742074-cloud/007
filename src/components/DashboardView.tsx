@@ -347,7 +347,7 @@ export default function DashboardView({
                     <div className="flex justify-between items-center text-3xs font-bold text-indigo-600 uppercase tracking-wider">
                       <span>Напоминание</span>
                       <span className="font-mono">
-                        {note.reminderDate} {note.reminderTime}
+                        {formatDate(note.reminderDate)} {note.reminderTime}
                       </span>
                     </div>
                     <h5 className="font-semibold text-slate-900 text-xs hover:text-emerald-700 hover:underline">

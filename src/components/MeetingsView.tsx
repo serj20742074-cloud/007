@@ -2,7 +2,7 @@ import React, { useState, useRef, ChangeEvent, FormEvent } from "react";
 import { AppDatabase, Meeting, Attachment } from "../types";
 import { Calendar, Clock, User, FileText, Plus, X, Upload, Paperclip, MessageSquare, Trash2, Pencil, Check, Camera, Clipboard } from "lucide-react";
 import CameraModal from "./CameraModal";
-import { getTodayStr } from "../utils/date";
+import { getTodayStr, formatDate } from "../utils/date";
 
 interface MeetingsViewProps {
   db: AppDatabase;
@@ -371,25 +371,49 @@ export default function MeetingsView({ db, addMeeting, updateMeeting, deleteMeet
       )}
 
       {/* Grid listing all scheduled meetings */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="meetings-cards-grid">
+      <div className="grid grid-cols-1 gap-4 w-full" id="meetings-cards-grid">
         {db.meetings.length === 0 ? (
           <div className="col-span-full bg-white p-10 text-center rounded-xl border border-slate-200 text-slate-400 font-medium">
             Запланированные совещания отсутствуют.
           </div>
         ) : (
-          db.meetings
-            .sort((a, b) => b.date.localeCompare(a.date)) // nearest/latest first
+          [...db.meetings]
+            .sort((a, b) => {
+              const now = new Date();
+              const nowMs = now.getTime();
+              
+              const getGroup = (meet: Meeting) => {
+                const meetDateTime = new Date(`${meet.date}T${meet.time}:00`);
+                const startMs = meetDateTime.getTime();
+                const oneHourLaterMs = startMs + 60 * 60 * 1000;
+                if (nowMs >= oneHourLaterMs) {
+                  return 2; // Group 2: Over / Archived (1 hour or more after start)
+                }
+                return 1; // Group 1: Upcoming or active (less than 1 hour since start)
+              };
+
+              const groupA = getGroup(a);
+              const groupB = getGroup(b);
+
+              if (groupA !== groupB) {
+                return groupA - groupB; // Group 1 first, Group 2 last
+              }
+
+              const timeA = new Date(`${a.date}T${a.time}:00`).getTime();
+              const timeB = new Date(`${b.date}T${b.time}:00`).getTime();
+              return timeA - timeB;
+            })
             .map(meet => {
-              const hasPast = meet.date < getTodayStr();
+              const hasPast = new Date().getTime() >= new Date(`${meet.date}T${meet.time}:00`).getTime() + 60 * 60 * 1000;
 
               return (
-                <div key={meet.id} className="bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col justify-between overflow-hidden" id={`meet-card-${meet.id}`}>
+                <div key={meet.id} className="bg-slate-50/90 border border-slate-300 shadow-sm rounded-xl flex flex-col justify-between overflow-hidden hover:shadow-md hover:border-slate-455 transition-all duration-200" id={`meet-card-${meet.id}`}>
                   {/* Card head */}
                   <div className="p-4 bg-slate-50 border-b border-slate-150 flex justify-between items-center text-xs font-semibold">
                     <span className={`px-2 py-0.5 rounded font-bold font-mono ${
                       hasPast ? "bg-slate-250 text-slate-500" : "bg-amber-100 text-amber-800 animate-pulse"
                     }`}>
-                      {meet.date} | в {meet.time}
+                      {formatDate(meet.date)} | в {meet.time}
                     </span>
                     <div className="flex items-center gap-1.5">
                       <button

@@ -585,9 +585,9 @@ export default function TasksView({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full" id="tasks-view-grid">
-      {/* 1. Left hand: Master Task List (5 columns) */}
-      <div className={`lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col h-[calc(100vh-140px)] min-h-[500px] ${
-        selectedTaskId ? "hidden lg:flex" : "flex"
+      {/* 1. Left hand: Master Task List (Full width) */}
+      <div className={`lg:col-span-12 bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col h-[calc(100vh-140px)] min-h-[500px] ${
+        selectedTaskId ? "hidden" : "flex"
       }`}>
         
         {/* Compact search bar header */}
@@ -748,7 +748,22 @@ export default function TasksView({
               Поручений по заданным критериям не найдено.
             </div>
           ) : (
-            filteredTasks.map(t => {
+            [...filteredTasks]
+              .sort((a, b) => {
+                const today = getTodayStr();
+                const isOverdueA = a.status === TaskStatus.Overdue || (a.status !== TaskStatus.Completed && a.executeDeadline < today);
+                const isOverdueB = b.status === TaskStatus.Overdue || (b.status !== TaskStatus.Completed && b.executeDeadline < today);
+                const isCompletedA = a.status === TaskStatus.Completed;
+                const isCompletedB = b.status === TaskStatus.Completed;
+
+                if (isCompletedA && !isCompletedB) return 1;
+                if (!isCompletedA && isCompletedB) return -1;
+                if (isOverdueA && !isOverdueB) return -1;
+                if (!isOverdueA && isOverdueB) return 1;
+
+                return a.executeDeadline.localeCompare(b.executeDeadline);
+              })
+              .map(t => {
               const isSelected = t.id === selectedTaskId;
               const overdue = t.status === TaskStatus.Overdue;
 
@@ -827,9 +842,9 @@ export default function TasksView({
         </div>
       </div>
 
-      {/* 2. Right hand: Detailed Card (7 columns) */}
-      <div className={`lg:col-span-7 bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col h-[calc(100vh-140px)] min-h-[500px] overflow-hidden ${
-        selectedTaskId ? "flex" : "hidden lg:flex"
+      {/* 2. Right hand: Detailed Card (Full width) */}
+      <div className={`lg:col-span-12 bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col h-[calc(100vh-140px)] min-h-[500px] overflow-hidden ${
+        selectedTaskId ? "flex" : "hidden"
       }`}>
         {!task ? (
           <div className="flex-1 flex flex-col items-center justify-center p-10 text-slate-400 text-center">
@@ -844,7 +859,7 @@ export default function TasksView({
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <button
                     onClick={() => onSelectTask(null)}
-                    className="lg:hidden bg-slate-200 hover:bg-slate-300 active:bg-slate-350 text-slate-800 py-1 px-2.5 rounded text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                    className="bg-slate-200 hover:bg-slate-300 active:bg-slate-350 text-slate-800 py-1 px-2.5 rounded text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
                   >
                     ← Назад
                   </button>
@@ -1253,7 +1268,7 @@ export default function TasksView({
                       <div key={progress.id} className="py-2.5 space-y-1">
                         <div className="flex justify-between items-center text-3xs text-slate-400 font-mono">
                           <span className="font-bold text-slate-600">Координатор исполнения</span>
-                          <span>{progress.date}</span>
+                          <span>{formatDate(progress.date)}</span>
                         </div>
                         <p className="text-3xs text-slate-800 font-medium leading-relaxed bg-slate-50/50 p-2 border border-slate-100 rounded">
                           {progress.text}
@@ -1368,7 +1383,7 @@ export default function TasksView({
                               {doc.type}
                             </span>
                             <span className="font-mono font-bold text-slate-800">№ {doc.number}</span>
-                            <span className="text-slate-400 font-mono">от {doc.date}</span>
+                            <span className="text-slate-400 font-mono">от {formatDate(doc.date)}</span>
                           </div>
                           <p className="text-slate-600 font-medium leading-normal">{doc.description}</p>
                           

@@ -2,7 +2,7 @@ import React, { useState, useRef, ChangeEvent, FormEvent } from "react";
 import { AppDatabase, Note, Attachment } from "../types";
 import { Plus, X, Trash2, ShieldAlert, Clock, Paperclip, Upload, FileCheck, HelpCircle, Camera, Pencil, Check, Clipboard } from "lucide-react";
 import CameraModal from "./CameraModal";
-import { getTodayStr } from "../utils/date";
+import { getTodayStr, formatDate } from "../utils/date";
 
 interface NotesViewProps {
   db: AppDatabase;
@@ -435,19 +435,31 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
               : `Заметки со статусом «${filter === "active" ? "В работе" : "Отработанные"}» не обнаружены.`}
           </div>
         ) : (
-          filteredNotes
-            .slice()
-            .reverse() // latest first
+          [...filteredNotes]
+            .sort((a, b) => {
+              // Sort by reminderDate ascending (closest deadline first)
+              if (a.reminderDate && !b.reminderDate) return -1;
+              if (!a.reminderDate && b.reminderDate) return 1;
+              if (a.reminderDate && b.reminderDate) {
+                const dateCompare = a.reminderDate.localeCompare(b.reminderDate);
+                if (dateCompare !== 0) return dateCompare;
+                const timeA = a.reminderTime || "";
+                const timeB = b.reminderTime || "";
+                return timeA.localeCompare(timeB);
+              }
+              // Fallback to id descending
+              return b.id.localeCompare(a.id);
+            })
             .map(note => {
               const hasAlert = note.reminderDate === getTodayStr();
 
               return (
                 <div 
                   key={note.id} 
-                  className={`bg-white rounded-xl border flex flex-col justify-between overflow-hidden relative transition-all duration-200 ${
+                  className={`rounded-xl border flex flex-col justify-between overflow-hidden relative transition-all duration-200 hover:shadow-md ${
                     note.isCompleted 
-                      ? "border-emerald-150 bg-slate-50/70 opacity-80 shadow-3xs" 
-                      : "border-slate-200 shadow-xs hover:border-slate-300"
+                      ? "border-emerald-250 bg-emerald-50/15 opacity-80 shadow-3xs hover:border-emerald-305" 
+                      : "bg-slate-50/90 border-slate-300 shadow-sm hover:border-slate-450"
                   }`} 
                   id={`note-card-${note.id}`}
                 >
@@ -462,7 +474,7 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
                         <Clock className="w-3.5 h-3.5 text-slate-500" />
                         Срок напоминания:
                       </span>
-                      <span className="font-mono">{note.reminderDate} {note.reminderTime || ""}</span>
+                      <span className="font-mono">{formatDate(note.reminderDate)} {note.reminderTime || ""}</span>
                     </div>
                   )}
 

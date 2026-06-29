@@ -278,7 +278,7 @@ export default function DocumentsView({ db, onNavigateToTask, onNavigateToMeetin
         ) : (
           matchedDocs.map(doc => {
             return (
-              <div key={doc.id} className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden flex flex-col justify-between" id={`doc-card-${doc.id}`}>
+              <div key={doc.id} className="bg-slate-50/90 border border-slate-300 shadow-sm rounded-xl overflow-hidden flex flex-col justify-between hover:shadow-md hover:border-slate-450 transition-all duration-200" id={`doc-card-${doc.id}`}>
                 
                 {/* Header of document item */}
                 <div className="p-4 bg-slate-50/50 border-b border-slate-150 flex flex-wrap justify-between items-center gap-2.5">

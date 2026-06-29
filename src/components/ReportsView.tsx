@@ -16,6 +16,7 @@ import { getTodayStr, formatDate } from "../utils/date";
 
 interface ReportsViewProps {
   db: AppDatabase;
+  onNavigateToTask?: (taskId: string) => void;
 }
 
 type ReportType = 
@@ -30,7 +31,7 @@ type ReportType =
   | "DEBTORS"
   | "OVERDUE";
 
-export default function ReportsView({ db }: ReportsViewProps) {
+export default function ReportsView({ db, onNavigateToTask }: ReportsViewProps) {
   const [selectedReport, setSelectedReport] = useState<ReportType>("STATION");
 
   // Auxiliary date mock
@@ -757,7 +758,12 @@ export default function ReportsView({ db }: ReportsViewProps) {
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {currentReportData.data.map((item: any) => (
-                  <tr key={item.id} className="hover:bg-slate-50/50">
+                  <tr 
+                    key={item.id} 
+                    className="hover:bg-blue-50/70 hover:text-blue-900 cursor-pointer transition-colors"
+                    onClick={() => onNavigateToTask && onNavigateToTask(item.id)}
+                    title="Нажмите, чтобы открыть поручение"
+                  >
                     <td className="p-3 font-mono font-extrabold text-blue-600">{item.id}</td>
                     <td className="p-3 font-bold text-slate-900">{item.title}</td>
                     <td className="p-3 font-mono text-slate-505">{formatDate(item.dateGiven)}</td>
@@ -794,7 +800,12 @@ export default function ReportsView({ db }: ReportsViewProps) {
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {currentReportData.data.map((item: any) => (
-                  <tr key={item.id} className="hover:bg-slate-50/50">
+                  <tr 
+                    key={item.id} 
+                    className="hover:bg-blue-50/70 hover:text-blue-900 cursor-pointer transition-colors"
+                    onClick={() => onNavigateToTask && onNavigateToTask(item.id)}
+                    title="Нажмите, чтобы открыть поручение"
+                  >
                     <td className="p-3 font-mono font-bold text-slate-500">{item.id}</td>
                     <td className="p-3 font-bold text-slate-900">{item.title}</td>
                     <td className="p-3 font-mono">{formatDate(item.executeDeadline)}</td>
@@ -824,7 +835,12 @@ export default function ReportsView({ db }: ReportsViewProps) {
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {currentReportData.data.map((item: any, idx: number) => (
-                  <tr key={idx} className="hover:bg-rose-50/10 bg-rose-50/15">
+                  <tr 
+                    key={idx} 
+                    className="hover:bg-blue-50/70 hover:text-blue-900 cursor-pointer transition-colors bg-rose-50/10"
+                    onClick={() => onNavigateToTask && onNavigateToTask(item.id)}
+                    title="Нажмите, чтобы открыть поручение"
+                  >
                     <td className="p-3 font-mono font-bold text-slate-500">{item.stationCode}</td>
                     <td className="p-3 font-bold text-slate-900">{item.stationName}</td>
                     <td className="p-3">
@@ -859,7 +875,12 @@ export default function ReportsView({ db }: ReportsViewProps) {
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {currentReportData.data.map((item: any) => (
-                  <tr key={item.id} className="hover:bg-rose-50/5 bg-rose-50/10 text-rose-950">
+                  <tr 
+                    key={item.id} 
+                    className="hover:bg-blue-50/70 hover:text-blue-900 cursor-pointer transition-colors bg-rose-50/10 text-rose-950"
+                    onClick={() => onNavigateToTask && onNavigateToTask(item.id)}
+                    title="Нажмите, чтобы открыть поручение"
+                  >
                     <td className="p-3 font-mono font-extrabold text-rose-600">{item.id}</td>
                     <td className="p-3 font-bold text-slate-900">{item.title}</td>
                     <td className="p-3 font-mono font-black text-rose-600 text-center">{formatDate(item.executeDeadline)}</td>
