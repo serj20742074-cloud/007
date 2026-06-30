@@ -10,7 +10,13 @@ import {
   BarChart, 
   Activity, 
   Award,
-  Download
+  Download,
+  X,
+  Paperclip,
+  User,
+  Folder,
+  FileText,
+  Calendar
 } from "lucide-react";
 import { getTodayStr, formatDate } from "../utils/date";
 
@@ -33,6 +39,11 @@ type ReportType =
 
 export default function ReportsView({ db, onNavigateToTask }: ReportsViewProps) {
   const [selectedReport, setSelectedReport] = useState<ReportType>("STATION");
+  const [selectedStationCode, setSelectedStationCode] = useState<string | null>(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
 
   // Auxiliary date mock
   const todayStr = getTodayStr();
@@ -296,6 +307,7 @@ export default function ReportsView({ db, onNavigateToTask }: ReportsViewProps) 
       const rate = total > 0 ? Math.round((completed / total) * 100) : 100;
 
       return {
+        id: cat.id,
         name: cat.name,
         total,
         completed,
@@ -320,6 +332,7 @@ export default function ReportsView({ db, onNavigateToTask }: ReportsViewProps) 
       const rate = total > 0 ? Math.round((completed / total) * 100) : 100;
 
       return {
+        id: src.id,
         name: src.name,
         total,
         completed,
@@ -459,6 +472,1040 @@ export default function ReportsView({ db, onNavigateToTask }: ReportsViewProps) 
       break;
   }
 
+  // Render Station Modal Detail Card
+  const renderStationModal = () => {
+    if (!selectedStationCode) return null;
+    const station = db.stations.find(s => s.code === selectedStationCode);
+    if (!station) return null;
+
+    // Get all tasks and task states for this station
+    const stationTaskStates = db.taskStations.filter(ts => ts.stationId === station.code);
+    
+    // Detailed stats
+    const total = stationTaskStates.length;
+    const completed = stationTaskStates.filter(ts => ts.status === TaskStatus.Completed).length;
+    const progress = stationTaskStates.filter(ts => ts.status === TaskStatus.ReportReceived).length;
+    const inWork = stationTaskStates.filter(ts => ts.status === TaskStatus.InWork).length;
+    const overdue = stationTaskStates.filter(ts => 
+      ts.status === TaskStatus.Overdue || 
+      (ts.status !== TaskStatus.Completed && ts.status !== TaskStatus.ReportReceived && (db.tasks.find(t => t.id === ts.taskId)?.executeDeadline || "") < todayStr)
+    ).length;
+    const rate = total > 0 ? Math.round((completed / total) * 105) : 100;
+    const finalRate = rate > 100 ? 100 : rate;
+
+    return (
+      <div className="fixed inset-0 bg-slate-950/70 z-50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white text-slate-900 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          {/* Header */}
+          <div className="p-5 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+            <div className="space-y-1">
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-emerald-500/30">
+                Карточка Станции • {station.code}
+              </span>
+              <h3 className="text-lg font-bold flex items-center gap-2 mt-1">
+                <Activity className="w-5 h-5 text-emerald-400 shrink-0" />
+                Станция {station.name}
+              </h3>
+            </div>
+            <button 
+              onClick={() => setSelectedStationCode(null)} 
+              className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-xl hover:bg-slate-800 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6 overflow-y-auto flex-1">
+            {/* Stats and Contacts block */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+              {/* Left Column: Contact details */}
+              <div className="md:col-span-4 bg-slate-50 p-4 border border-slate-200 rounded-xl space-y-3.5">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b border-slate-200 pb-1.5">
+                  Контакты и состав
+                </h4>
+                <div className="space-y-2.5 text-xs text-slate-700">
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-bold uppercase">Начальник (ДС)</span>
+                    <span className="font-bold text-slate-900">{station.chief || "ДС не назначен"}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-bold uppercase">Основной Телефон</span>
+                    <a href={`tel:${station.phone}`} className="font-mono text-blue-600 hover:underline">{station.phone || "Нет телефона"}</a>
+                  </div>
+                  {station.leaders && station.leaders.length > 0 && (
+                    <div className="pt-2 border-t border-slate-200 space-y-2">
+                      <span className="block text-[10px] text-slate-400 font-bold uppercase">Другие руководители</span>
+                      {station.leaders.map((lead, idx) => (
+                        <div key={idx} className="bg-white p-2 rounded border border-slate-200 text-[11px]">
+                          <span className="font-semibold text-slate-800 block">{lead.name}</span>
+                          <span className="text-slate-500 font-mono text-[10px]">{lead.phone}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Execution Stats */}
+              <div className="md:col-span-8 bg-slate-50 p-4 border border-slate-200 rounded-xl flex flex-col justify-between">
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b border-slate-200 pb-1.5">
+                    Статистика дисциплины
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                    <div className="bg-white p-3 rounded-lg border border-slate-150 text-center">
+                      <span className="block text-[10px] text-slate-400 font-semibold uppercase">Поручений</span>
+                      <span className="text-lg font-black text-slate-800 font-mono">{total}</span>
+                    </div>
+                    <div className="bg-emerald-50/50 p-3 rounded-lg border border-emerald-150 text-center">
+                      <span className="block text-[10px] text-emerald-600 font-semibold uppercase">Выполнено</span>
+                      <span className="text-lg font-black text-emerald-700 font-mono">{completed}</span>
+                    </div>
+                    <div className="bg-indigo-50/50 p-3 rounded-lg border border-indigo-150 text-center">
+                      <span className="block text-[10px] text-indigo-600 font-semibold uppercase">В работе</span>
+                      <span className="text-lg font-black text-indigo-700 font-mono">{inWork + progress}</span>
+                    </div>
+                    <div className="bg-rose-50/50 p-3 rounded-lg border border-rose-150 text-center">
+                      <span className="block text-[10px] text-rose-600 font-semibold uppercase">Просрочено</span>
+                      <span className="text-lg font-black text-rose-700 font-mono">{overdue}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 flex items-center gap-4">
+                  <div className="flex-1">
+                    <div className="flex justify-between text-[11px] font-bold text-slate-600 mb-1">
+                      <span>Уровень исполнительской дисциплины</span>
+                      <span>{finalRate}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full transition-all duration-500 ${
+                          finalRate >= 80 ? "bg-emerald-500" : finalRate >= 50 ? "bg-amber-500" : "bg-rose-500"
+                        }`}
+                        style={{ width: `${finalRate}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="text-center shrink-0">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Оценка</span>
+                    <span className={`text-sm font-black uppercase ${
+                      finalRate >= 85 ? "text-emerald-600" : finalRate >= 70 ? "text-blue-600" : finalRate >= 50 ? "text-amber-600" : "text-rose-600"
+                    }`}>
+                      {finalRate >= 85 ? "Отлично" : finalRate >= 70 ? "Хорошо" : finalRate >= 50 ? "Удовл." : "Неудовл."}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Detailed work by task */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                <FileSpreadsheet className="w-4 h-4 text-slate-500" />
+                Реестр выполненных и закрепленных работ
+              </h4>
+
+              {stationTaskStates.length === 0 ? (
+                <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 text-xs italic">
+                  По данной станции не закреплено ни одного поручения
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {stationTaskStates.map(state => {
+                    const task = db.tasks.find(t => t.id === state.taskId);
+                    if (!task) return null;
+
+                    return (
+                      <div key={state.taskId} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 hover:shadow-xs transition-shadow">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shrink-0">
+                              № {state.taskId}
+                            </span>
+                            <h5 
+                              className="font-bold text-slate-900 text-sm hover:underline cursor-pointer" 
+                              onClick={() => {
+                                setSelectedStationCode(null);
+                                onNavigateToTask && onNavigateToTask(state.taskId);
+                              }}
+                              title="Перейти к деталям поручения"
+                            >
+                              {task.title}
+                            </h5>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                              state.status === TaskStatus.Completed ? "bg-emerald-100 text-emerald-800" :
+                              state.status === TaskStatus.ReportReceived ? "bg-blue-100 text-blue-800" :
+                              state.status === TaskStatus.InWork ? "bg-amber-100 text-amber-800" :
+                              state.status === TaskStatus.Overdue ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-800"
+                            }`}>
+                              {state.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Description / comment on how the work was done */}
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 bg-slate-50/50 p-3 rounded-lg border border-slate-100 text-xs">
+                          <div className="md:col-span-5 space-y-1.5 border-r border-slate-200/60 pr-2 text-[11px]">
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Срок сдачи:</span>
+                              <span className="font-semibold text-rose-700 font-mono">{formatDate(task.executeDeadline)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Дата отчета:</span>
+                              <span className="font-semibold text-slate-700 font-mono">{state.reportDate ? formatDate(state.reportDate) : "—"}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Тип контроля:</span>
+                              <span className="font-semibold text-slate-700">{task.importance}</span>
+                            </div>
+                          </div>
+
+                          <div className="md:col-span-7 space-y-1">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Отчет станции / Проведенная работа:</span>
+                            <p className="text-slate-800 font-medium leading-relaxed bg-white p-2 border border-slate-200 rounded text-[11px] whitespace-pre-wrap italic">
+                              {state.comment ? state.comment : "Отчет о выполнении пока не предоставлен станцией"}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Attachments (photos, documents) uploaded by station */}
+                        {state.attachments && state.attachments.length > 0 && (
+                          <div className="pt-1.5">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block mb-1.5">Прикрепленные фотоматериалы и файлы:</span>
+                            <div className="flex flex-wrap gap-2">
+                              {state.attachments.map(att => (
+                                <div 
+                                  key={att.id}
+                                  className="group relative text-[11px] bg-slate-100 border border-slate-200 rounded-lg p-2 flex items-center gap-2 max-w-xs hover:bg-slate-200/80 transition-colors cursor-pointer"
+                                  onClick={() => {
+                                    if (att.fileData) {
+                                      // If there's fileData (like base64 image), open in new window or view it
+                                      const win = window.open();
+                                      if (win) {
+                                        win.document.write(`<iframe src="${att.fileData}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+                                      }
+                                    }
+                                  }}
+                                  title="Нажмите для полноэкранного просмотра снимка"
+                                >
+                                  {att.fileType === "jpg" || att.fileType === "png" ? (
+                                    <div className="w-10 h-10 rounded bg-slate-200 overflow-hidden shrink-0 border border-slate-300">
+                                      <img src={att.fileData} className="w-full h-full object-cover" alt="Attached photo" referrerPolicy="no-referrer" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-10 h-10 rounded bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 border border-blue-200">
+                                      <FileSpreadsheet className="w-5 h-5" />
+                                    </div>
+                                  )}
+                                  <div className="truncate flex-1">
+                                    <span className="font-bold text-slate-800 block truncate underline">{att.fileName}</span>
+                                    <span className="text-slate-400 font-mono text-[9px]">{att.size || "Снимок с планшета"}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <button 
+              onClick={() => setSelectedStationCode(null)}
+              className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs py-2 px-5 rounded-lg transition-colors cursor-pointer"
+            >
+              Закрыть
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render Employee Modal Detail Card
+  const renderEmployeeModal = () => {
+    if (!selectedEmployeeId) return null;
+    const employee = db.employees.find(e => e.id === selectedEmployeeId);
+    if (!employee) return null;
+
+    // Get all individual tasks where this employee is assigned
+    const assignedTasks = db.tasks.filter(t => 
+      t.type === TaskType.Individual && t.assignments?.includes(employee.id)
+    );
+
+    const total = assignedTasks.length;
+    const completed = assignedTasks.filter(t => t.status === TaskStatus.Completed).length;
+    const inWork = assignedTasks.filter(t => t.status === TaskStatus.InWork || t.status === TaskStatus.ReportReceived).length;
+    const overdue = assignedTasks.filter(t => t.status === TaskStatus.Overdue).length;
+    const rate = total > 0 ? Math.round((completed / total) * 100) : 100;
+
+    return (
+      <div className="fixed inset-0 bg-slate-950/70 z-50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white text-slate-900 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          {/* Header */}
+          <div className="p-5 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+            <div className="space-y-1">
+              <span className="text-[10px] bg-blue-500/20 text-blue-300 font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-blue-500/30">
+                Карточка Исполнителя • {employee.id}
+              </span>
+              <h3 className="text-lg font-bold flex items-center gap-2 mt-1">
+                <Award className="w-5 h-5 text-blue-400 shrink-0" />
+                {employee.fullName}
+              </h3>
+            </div>
+            <button 
+              onClick={() => setSelectedEmployeeId(null)} 
+              className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-xl hover:bg-slate-800 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6 overflow-y-auto flex-1">
+            {/* Stats and Contacts block */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+              {/* Left Column: Contact details */}
+              <div className="md:col-span-4 bg-slate-50 p-4 border border-slate-200 rounded-xl space-y-3.5">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b border-slate-200 pb-1.5">
+                  Профиль специалиста
+                </h4>
+                <div className="space-y-2.5 text-xs text-slate-700">
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-bold uppercase">Должность</span>
+                    <span className="font-bold text-slate-900">{employee.role}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-bold uppercase">Подразделение</span>
+                    <span className="font-bold text-slate-900">{employee.department}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-bold uppercase">Телефон связи</span>
+                    <a href={`tel:${employee.phone}`} className="font-mono text-blue-650 hover:underline">{employee.phone || "Нет телефона"}</a>
+                  </div>
+                  {employee.note && (
+                    <div className="pt-2 border-t border-slate-200">
+                      <span className="block text-[10px] text-slate-400 font-bold uppercase">Примечание</span>
+                      <p className="text-slate-600 text-[11px] italic mt-1 leading-relaxed bg-white p-2 border border-slate-200 rounded">{employee.note}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Execution Stats */}
+              <div className="md:col-span-8 bg-slate-50 p-4 border border-slate-200 rounded-xl flex flex-col justify-between">
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b border-slate-200 pb-1.5">
+                    Индивидуальная дисциплина
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                    <div className="bg-white p-3 rounded-lg border border-slate-150 text-center">
+                      <span className="block text-[10px] text-slate-400 font-semibold uppercase">Поручений</span>
+                      <span className="text-lg font-black text-slate-800 font-mono">{total}</span>
+                    </div>
+                    <div className="bg-emerald-50/50 p-3 rounded-lg border border-emerald-150 text-center">
+                      <span className="block text-[10px] text-emerald-600 font-semibold uppercase">Выполнено</span>
+                      <span className="text-lg font-black text-emerald-700 font-mono">{completed}</span>
+                    </div>
+                    <div className="bg-indigo-50/50 p-3 rounded-lg border border-indigo-150 text-center">
+                      <span className="block text-[10px] text-indigo-600 font-semibold uppercase">В работе</span>
+                      <span className="text-lg font-black text-indigo-700 font-mono">{inWork}</span>
+                    </div>
+                    <div className="bg-rose-50/50 p-3 rounded-lg border border-rose-150 text-center">
+                      <span className="block text-[10px] text-rose-600 font-semibold uppercase">Просрочено</span>
+                      <span className="text-lg font-black text-rose-700 font-mono">{overdue}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 flex items-center gap-4">
+                  <div className="flex-1">
+                    <div className="flex justify-between text-[11px] font-bold text-slate-600 mb-1">
+                      <span>Процент исполнения индивидуальных поручений</span>
+                      <span>{rate}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full transition-all duration-500 ${
+                          rate >= 80 ? "bg-emerald-500" : rate >= 50 ? "bg-amber-500" : "bg-rose-500"
+                        }`}
+                        style={{ width: `${rate}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div className="text-center shrink-0">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Оценка</span>
+                    <span className={`text-sm font-black uppercase ${
+                      rate >= 85 ? "text-emerald-600" : rate >= 70 ? "text-blue-600" : rate >= 50 ? "text-amber-600" : "text-rose-600"
+                    }`}>
+                      {rate >= 85 ? "Отлично" : rate >= 70 ? "Хорошо" : rate >= 50 ? "Удовл." : "Неудовл."}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Detailed work by task */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                <FileSpreadsheet className="w-4 h-4 text-slate-500" />
+                Закрепленные индивидуальные поручения и ход выполнения
+              </h4>
+
+              {assignedTasks.length === 0 ? (
+                <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 text-xs italic">
+                  За исполнителем не закреплено индивидуальных поручений в АРМ
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {assignedTasks.map(task => {
+                    const progressList = db.taskProgress.filter(tp => tp.taskId === task.id);
+
+                    return (
+                      <div key={task.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 hover:shadow-xs transition-shadow">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shrink-0">
+                              № {task.id}
+                            </span>
+                            <h5 
+                              className="font-bold text-slate-900 text-sm hover:underline cursor-pointer"
+                              onClick={() => {
+                                setSelectedEmployeeId(null);
+                                onNavigateToTask && onNavigateToTask(task.id);
+                              }}
+                              title="Перейти к деталям поручения"
+                            >
+                              {task.title}
+                            </h5>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                              task.status === TaskStatus.Completed ? "bg-emerald-100 text-emerald-800" :
+                              task.status === TaskStatus.ReportReceived ? "bg-blue-100 text-blue-800" :
+                              task.status === TaskStatus.InWork ? "bg-amber-100 text-amber-800" :
+                              task.status === TaskStatus.Overdue ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-800"
+                            }`}>
+                              {task.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* General task info */}
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 bg-slate-50/50 p-3 rounded-lg border border-slate-100 text-xs">
+                          <div className="md:col-span-4 space-y-1.5 border-r border-slate-200/60 pr-2 text-[11px]">
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Срок исполнения:</span>
+                              <span className="font-semibold text-rose-700 font-mono">{formatDate(task.executeDeadline)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Срок информ.:</span>
+                              <span className="font-semibold text-slate-700 font-mono">{formatDate(task.infoDeadline)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-400">Важность:</span>
+                              <span className="font-semibold text-slate-700">{task.importance}</span>
+                            </div>
+                          </div>
+
+                          <div className="md:col-span-8 space-y-1">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block">Формулировка задачи:</span>
+                            <p className="text-slate-705 text-[11px] leading-relaxed bg-white p-2 border border-slate-200 rounded">
+                              {task.text}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Progress Activity Feed */}
+                        <div className="space-y-2">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Ход проработки и отчетность по задаче:</span>
+                          {progressList.length === 0 ? (
+                            <p className="text-[11px] text-slate-400 italic">Активность по исполнению пока не зарегистрирована</p>
+                          ) : (
+                            <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                              {progressList.map(prog => (
+                                <div key={prog.id} className="bg-slate-50 border border-slate-150 rounded-lg p-2.5 text-[11px] space-y-1.5">
+                                  <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                                    <span className="font-semibold text-slate-600">Отчет от исполнителя</span>
+                                    <span>{formatDate(prog.date)}</span>
+                                  </div>
+                                  <p className="text-slate-800 font-medium whitespace-pre-wrap">{prog.text}</p>
+                                  
+                                  {prog.attachments && prog.attachments.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 pt-1 border-t border-slate-100 mt-1">
+                                      {prog.attachments.map(att => (
+                                        <div 
+                                          key={att.id}
+                                          className="text-[10px] bg-white hover:bg-slate-100 border border-slate-200 p-1 px-2 rounded flex items-center gap-1.5 transition-colors cursor-pointer"
+                                          onClick={() => {
+                                            if (att.fileData) {
+                                              const win = window.open();
+                                              if (win) {
+                                                win.document.write(`<iframe src="${att.fileData}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+                                              }
+                                            }
+                                          }}
+                                        >
+                                          <Paperclip className="w-2.5 h-2.5 text-blue-500" />
+                                          <span className="underline font-medium text-slate-700">{att.fileName}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <button 
+              onClick={() => setSelectedEmployeeId(null)}
+              className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs py-2 px-5 rounded-lg transition-colors cursor-pointer"
+            >
+              Закрыть
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render Manager Modal Detail Card
+  const renderManagerModal = () => {
+    if (!selectedManagerId) return null;
+    const manager = db.managers.find(m => m.id === selectedManagerId);
+    if (!manager) return null;
+
+    // Get all tasks issued by this manager
+    const managerTasks = db.tasks.filter(t => t.managerId === manager.id);
+    const total = managerTasks.length;
+    const completed = managerTasks.filter(t => t.status === TaskStatus.Completed).length;
+    const inWork = managerTasks.filter(t => t.status === TaskStatus.InWork || t.status === TaskStatus.ReportReceived).length;
+    const overdue = managerTasks.filter(t => t.status === TaskStatus.Overdue).length;
+    const rate = total > 0 ? Math.round((completed / total) * 100) : 100;
+
+    return (
+      <div className="fixed inset-0 bg-slate-950/70 z-50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white text-slate-900 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          {/* Header */}
+          <div className="p-5 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+            <div className="space-y-1">
+              <span className="text-[10px] bg-indigo-500/20 text-indigo-300 font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-indigo-500/30">
+                Карточка Руководителя • {manager.id}
+              </span>
+              <h3 className="text-lg font-bold flex items-center gap-2 mt-1">
+                <User className="w-5 h-5 text-indigo-400 shrink-0" />
+                {manager.fullName}
+              </h3>
+            </div>
+            <button 
+              onClick={() => setSelectedManagerId(null)} 
+              className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-xl hover:bg-slate-800 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6 overflow-y-auto flex-1">
+            {/* Profile and Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+              <div className="md:col-span-4 bg-slate-50 p-4 border border-slate-200 rounded-xl space-y-3.5">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b border-slate-200 pb-1.5">
+                  Профиль Руководителя
+                </h4>
+                <div className="space-y-2.5 text-xs text-slate-700">
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-bold uppercase">Должность</span>
+                    <span className="font-bold text-slate-900">{manager.role}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-bold uppercase">Департамент / Отдел</span>
+                    <span className="font-bold text-slate-900">{manager.department}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="md:col-span-8 bg-slate-50 p-4 border border-slate-200 rounded-xl flex flex-col justify-between">
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b border-slate-200 pb-1.5">
+                    Статистика выданных поручений
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                    <div className="bg-white p-3 rounded-lg border border-slate-150 text-center">
+                      <span className="block text-[10px] text-slate-400 font-semibold uppercase">Выдано</span>
+                      <span className="text-lg font-black text-slate-800 font-mono">{total}</span>
+                    </div>
+                    <div className="bg-emerald-50/50 p-3 rounded-lg border border-emerald-150 text-center">
+                      <span className="block text-[10px] text-emerald-600 font-semibold uppercase">Выполнено</span>
+                      <span className="text-lg font-black text-emerald-700 font-mono">{completed}</span>
+                    </div>
+                    <div className="bg-indigo-55/50 p-3 rounded-lg border border-indigo-150 text-center">
+                      <span className="block text-[10px] text-indigo-600 font-semibold uppercase">В работе</span>
+                      <span className="text-lg font-black text-indigo-700 font-mono">{inWork}</span>
+                    </div>
+                    <div className="bg-rose-50/50 p-3 rounded-lg border border-rose-150 text-center">
+                      <span className="block text-[10px] text-rose-600 font-semibold uppercase">Просрочено</span>
+                      <span className="text-lg font-black text-rose-700 font-mono">{overdue}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 flex items-center gap-4">
+                  <div className="flex-1">
+                    <div className="flex justify-between text-[11px] font-bold text-slate-600 mb-1">
+                      <span>Процент своевременного закрытия</span>
+                      <span>{rate}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full transition-all duration-500 ${
+                          rate >= 80 ? "bg-emerald-500" : rate >= 50 ? "bg-amber-500" : "bg-rose-500"
+                        }`}
+                        style={{ width: `${rate}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Issued tasks list */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                <FileText className="w-4 h-4 text-slate-500" />
+                Реестр выданных поручений
+              </h4>
+
+              {managerTasks.length === 0 ? (
+                <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 text-xs italic">
+                  Руководитель пока не зафиксировал выданных поручений
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {managerTasks.map(task => (
+                    <div key={task.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 hover:shadow-xs transition-shadow">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 shrink-0">
+                            № {task.id}
+                          </span>
+                          <h5 
+                            className="font-bold text-slate-900 text-sm hover:underline cursor-pointer"
+                            onClick={() => {
+                              setSelectedManagerId(null);
+                              onNavigateToTask && onNavigateToTask(task.id);
+                            }}
+                            title="Перейти к деталям поручения"
+                          >
+                            {task.title}
+                          </h5>
+                        </div>
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                          task.status === TaskStatus.Completed ? "bg-emerald-100 text-emerald-800" :
+                          task.status === TaskStatus.ReportReceived ? "bg-blue-100 text-blue-800" :
+                          task.status === TaskStatus.InWork ? "bg-amber-100 text-amber-800" :
+                          task.status === TaskStatus.Overdue ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-800"
+                        }`}>
+                          {task.status}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 bg-slate-50/50 p-3 rounded-lg border border-slate-100 text-xs">
+                        <div className="md:col-span-4 space-y-1.5 border-r border-slate-200/60 pr-2 text-[11px]">
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Срок окончательный:</span>
+                            <span className="font-semibold text-rose-700 font-mono">{formatDate(task.executeDeadline)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Срок информирования:</span>
+                            <span className="font-semibold text-slate-700 font-mono">{formatDate(task.infoDeadline)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Тип:</span>
+                            <span className="font-semibold text-slate-700">{task.type}</span>
+                          </div>
+                        </div>
+                        <div className="md:col-span-8 space-y-1">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Формулировка контроля:</span>
+                          <p className="text-slate-800 text-[11px] leading-relaxed bg-white p-2 border border-slate-200 rounded">
+                            {task.text}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <button 
+              onClick={() => setSelectedManagerId(null)}
+              className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs py-2 px-5 rounded-lg transition-colors cursor-pointer"
+            >
+              Закрыть
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render Category Modal Detail Card
+  const renderCategoryModal = () => {
+    if (!selectedCategoryId) return null;
+    const category = db.categories.find(c => c.id === selectedCategoryId);
+    if (!category) return null;
+
+    // Get all tasks in this category
+    const categoryTasks = db.tasks.filter(t => t.categoryId === category.id);
+    const total = categoryTasks.length;
+    const completed = categoryTasks.filter(t => t.status === TaskStatus.Completed).length;
+    const inWork = categoryTasks.filter(t => t.status === TaskStatus.InWork || t.status === TaskStatus.ReportReceived).length;
+    const overdue = categoryTasks.filter(t => t.status === TaskStatus.Overdue).length;
+    const rate = total > 0 ? Math.round((completed / total) * 100) : 100;
+
+    return (
+      <div className="fixed inset-0 bg-slate-950/70 z-50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white text-slate-900 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          {/* Header */}
+          <div className="p-5 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+            <div className="space-y-1">
+              <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-amber-500/30">
+                Карточка Категории
+              </span>
+              <h3 className="text-lg font-bold flex items-center gap-2 mt-1">
+                <Folder className="w-5 h-5 text-amber-400 shrink-0" />
+                {category.name}
+              </h3>
+            </div>
+            <button 
+              onClick={() => setSelectedCategoryId(null)} 
+              className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-xl hover:bg-slate-800 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6 overflow-y-auto flex-1">
+            {/* Stats */}
+            <div className="bg-slate-50 p-4 border border-slate-200 rounded-xl flex flex-col justify-between">
+              <div className="space-y-1.5">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b border-slate-200 pb-1.5">
+                  Сводная статистика исполнения по тематике
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                  <div className="bg-white p-3 rounded-lg border border-slate-150 text-center">
+                    <span className="block text-[10px] text-slate-400 font-semibold uppercase">Предписаний</span>
+                    <span className="text-lg font-black text-slate-800 font-mono">{total}</span>
+                  </div>
+                  <div className="bg-emerald-50/50 p-3 rounded-lg border border-emerald-150 text-center">
+                    <span className="block text-[10px] text-emerald-600 font-semibold uppercase">Исполнено</span>
+                    <span className="text-lg font-black text-emerald-700 font-mono">{completed}</span>
+                  </div>
+                  <div className="bg-indigo-50/50 p-3 rounded-lg border border-indigo-150 text-center">
+                    <span className="block text-[10px] text-indigo-600 font-semibold uppercase">В работе</span>
+                    <span className="text-lg font-black text-indigo-700 font-mono">{inWork}</span>
+                  </div>
+                  <div className="bg-rose-50/50 p-3 rounded-lg border border-rose-150 text-center">
+                    <span className="block text-[10px] text-rose-600 font-semibold uppercase">Просрочено</span>
+                    <span className="text-lg font-black text-rose-700 font-mono">{overdue}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 flex items-center gap-4">
+                <div className="flex-1">
+                  <div className="flex justify-between text-[11px] font-bold text-slate-600 mb-1">
+                    <span>Общий процент успешного выполнения</span>
+                    <span>{rate}%</span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full transition-all duration-500 ${
+                        rate >= 80 ? "bg-emerald-500" : rate >= 50 ? "bg-amber-500" : "bg-rose-500"
+                      }`}
+                      style={{ width: `${rate}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tasks list */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                <FileText className="w-4 h-4 text-slate-500" />
+                Закрепленные поручения в данной категории
+              </h4>
+
+              {categoryTasks.length === 0 ? (
+                <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 text-xs italic">
+                  Поручения по данной тематике отсутствуют в АРМ
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {categoryTasks.map(task => (
+                    <div key={task.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 hover:shadow-xs transition-shadow">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-mono font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 shrink-0">
+                            № {task.id}
+                          </span>
+                          <h5 
+                            className="font-bold text-slate-900 text-sm hover:underline cursor-pointer"
+                            onClick={() => {
+                              setSelectedCategoryId(null);
+                              onNavigateToTask && onNavigateToTask(task.id);
+                            }}
+                            title="Перейти к деталям поручения"
+                          >
+                            {task.title}
+                          </h5>
+                        </div>
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                          task.status === TaskStatus.Completed ? "bg-emerald-100 text-emerald-800" :
+                          task.status === TaskStatus.ReportReceived ? "bg-blue-100 text-blue-800" :
+                          task.status === TaskStatus.InWork ? "bg-amber-100 text-amber-800" :
+                          task.status === TaskStatus.Overdue ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-800"
+                        }`}>
+                          {task.status}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 bg-slate-50/50 p-3 rounded-lg border border-slate-100 text-xs">
+                        <div className="md:col-span-4 space-y-1.5 border-r border-slate-200/60 pr-2 text-[11px]">
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Срок окончательный:</span>
+                            <span className="font-semibold text-rose-700 font-mono">{formatDate(task.executeDeadline)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Автор контроля:</span>
+                            <span className="font-semibold text-slate-700">
+                              {db.managers.find(m => m.id === task.managerId)?.fullName || "Не указан"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Важность:</span>
+                            <span className="font-semibold text-slate-700">{task.importance}</span>
+                          </div>
+                        </div>
+                        <div className="md:col-span-8 space-y-1">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Формулировка контроля:</span>
+                          <p className="text-slate-800 text-[11px] leading-relaxed bg-white p-2 border border-slate-200 rounded">
+                            {task.text}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <button 
+              onClick={() => setSelectedCategoryId(null)}
+              className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs py-2 px-5 rounded-lg transition-colors cursor-pointer"
+            >
+              Закрыть
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Render Source Modal Detail Card
+  const renderSourceModal = () => {
+    if (!selectedSourceId) return null;
+    const source = db.sources.find(s => s.id === selectedSourceId);
+    if (!source) return null;
+
+    // Get all tasks from this source
+    const sourceTasks = db.tasks.filter(t => t.sourceId === source.id);
+    const total = sourceTasks.length;
+    const completed = sourceTasks.filter(t => t.status === TaskStatus.Completed).length;
+    const inWork = sourceTasks.filter(t => t.status === TaskStatus.InWork || t.status === TaskStatus.ReportReceived).length;
+    const overdue = sourceTasks.filter(t => t.status === TaskStatus.Overdue).length;
+    const rate = total > 0 ? Math.round((completed / total) * 100) : 100;
+
+    return (
+      <div className="fixed inset-0 bg-slate-950/70 z-50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="bg-white text-slate-900 rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+          {/* Header */}
+          <div className="p-5 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+            <div className="space-y-1">
+              <span className="text-[10px] bg-blue-500/20 text-blue-300 font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-blue-500/30">
+                Карточка Источника Поручений
+              </span>
+              <h3 className="text-lg font-bold flex items-center gap-2 mt-1">
+                <FileSpreadsheet className="w-5 h-5 text-blue-400 shrink-0" />
+                {source.name}
+              </h3>
+            </div>
+            <button 
+              onClick={() => setSelectedSourceId(null)} 
+              className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-xl hover:bg-slate-800 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6 overflow-y-auto flex-1">
+            {/* Stats */}
+            <div className="bg-slate-50 p-4 border border-slate-200 rounded-xl flex flex-col justify-between">
+              <div className="space-y-1.5">
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider border-b border-slate-200 pb-1.5">
+                  Сводная статистика исполнения по источнику
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                  <div className="bg-white p-3 rounded-lg border border-slate-150 text-center">
+                    <span className="block text-[10px] text-slate-400 font-semibold uppercase">Поручений</span>
+                    <span className="text-lg font-black text-slate-800 font-mono">{total}</span>
+                  </div>
+                  <div className="bg-emerald-50/50 p-3 rounded-lg border border-emerald-150 text-center">
+                    <span className="block text-[10px] text-emerald-600 font-semibold uppercase">Устранено</span>
+                    <span className="text-lg font-black text-emerald-700 font-mono">{completed}</span>
+                  </div>
+                  <div className="bg-indigo-50/50 p-3 rounded-lg border border-indigo-150 text-center">
+                    <span className="block text-[10px] text-indigo-600 font-semibold uppercase">В работе</span>
+                    <span className="text-lg font-black text-indigo-700 font-mono">{inWork}</span>
+                  </div>
+                  <div className="bg-rose-50/50 p-3 rounded-lg border border-rose-150 text-center">
+                    <span className="block text-[10px] text-rose-600 font-semibold uppercase">Просрочено</span>
+                    <span className="text-lg font-black text-rose-700 font-mono">{overdue}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 flex items-center gap-4">
+                <div className="flex-1">
+                  <div className="flex justify-between text-[11px] font-bold text-slate-600 mb-1">
+                    <span>Уровень исполнительской дисциплины</span>
+                    <span>{rate}%</span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-2">
+                    <div 
+                      className={`h-2 rounded-full transition-all duration-500 ${
+                        rate >= 80 ? "bg-emerald-500" : rate >= 50 ? "bg-amber-500" : "bg-rose-500"
+                      }`}
+                      style={{ width: `${rate}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tasks list */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                <FileText className="w-4 h-4 text-slate-500" />
+                Связанные поручения по данному источнику / процедуре
+              </h4>
+
+              {sourceTasks.length === 0 ? (
+                <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 text-xs italic">
+                  Поручения по данному источнику документов отсутствуют в АРМ
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {sourceTasks.map(task => (
+                    <div key={task.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 hover:shadow-xs transition-shadow">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shrink-0">
+                            № {task.id}
+                          </span>
+                          <h5 
+                            className="font-bold text-slate-900 text-sm hover:underline cursor-pointer"
+                            onClick={() => {
+                              setSelectedSourceId(null);
+                              onNavigateToTask && onNavigateToTask(task.id);
+                            }}
+                            title="Перейти к деталям поручения"
+                          >
+                            {task.title}
+                          </h5>
+                        </div>
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                          task.status === TaskStatus.Completed ? "bg-emerald-100 text-emerald-800" :
+                          task.status === TaskStatus.ReportReceived ? "bg-blue-100 text-blue-800" :
+                          task.status === TaskStatus.InWork ? "bg-amber-100 text-amber-800" :
+                          task.status === TaskStatus.Overdue ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-800"
+                        }`}>
+                          {task.status}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 bg-slate-50/50 p-3 rounded-lg border border-slate-100 text-xs">
+                        <div className="md:col-span-4 space-y-1.5 border-r border-slate-200/60 pr-2 text-[11px]">
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Срок окончательный:</span>
+                            <span className="font-semibold text-rose-700 font-mono">{formatDate(task.executeDeadline)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Тематика:</span>
+                            <span className="font-semibold text-slate-700">
+                              {db.categories.find(c => c.id === task.categoryId)?.name || "Общая"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400">Важность:</span>
+                            <span className="font-semibold text-slate-700">{task.importance}</span>
+                          </div>
+                        </div>
+                        <div className="md:col-span-8 space-y-1">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Формулировка контроля:</span>
+                          <p className="text-slate-850 text-[11px] leading-relaxed bg-white p-2 border border-slate-200 rounded">
+                            {task.text}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <button 
+              onClick={() => setSelectedSourceId(null)}
+              className="bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs py-2 px-5 rounded-lg transition-colors cursor-pointer"
+            >
+              Закрыть
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full print:p-0 select-none pb-12" id="reports-view-root">
       {/* 1. Left side controls: Report categorizer list */}
@@ -576,9 +1623,14 @@ export default function ReportsView({ db, onNavigateToTask }: ReportsViewProps) 
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {currentReportData.data.map((item: any) => (
-                  <tr key={item.code} className="hover:bg-slate-50/50">
+                  <tr 
+                    key={item.code} 
+                    className="hover:bg-blue-50/50 cursor-pointer transition-colors"
+                    onClick={() => setSelectedStationCode(item.code)}
+                    title="Нажмите, чтобы открыть карточку станции и посмотреть работу по поручениям"
+                  >
                     <td className="p-3 font-mono font-bold text-slate-500">{item.code}</td>
-                    <td className="p-3 font-bold text-slate-900">{item.name}</td>
+                    <td className="p-3 font-bold text-blue-600 hover:underline">{item.name}</td>
                     <td className="p-3">{item.chief || "Не указан"}</td>
                     <td className="p-3 text-center font-mono font-bold">{item.total}</td>
                     <td className="p-3 text-center font-mono text-emerald-600 font-bold bg-emerald-50/20">{item.completed}</td>
@@ -615,8 +1667,13 @@ export default function ReportsView({ db, onNavigateToTask }: ReportsViewProps) 
               </thead>
               <tbody className="divide-y divide-slate-150 font-medium">
                 {currentReportData.data.map((item: any) => (
-                  <tr key={item.code} className="hover:bg-slate-50/40">
-                    <td className="p-3 font-bold text-slate-900">{item.chief || "Вакансия ДС"}</td>
+                  <tr 
+                    key={item.code} 
+                    className="hover:bg-blue-50/50 cursor-pointer transition-colors"
+                    onClick={() => setSelectedStationCode(item.code)}
+                    title="Нажмите, чтобы открыть карточку начальника станции и посмотреть работу по поручениям"
+                  >
+                    <td className="p-3 font-bold text-blue-600 hover:underline">{item.chief || "Вакансия ДС"}</td>
                     <td className="p-3 font-semibold text-slate-600">{item.name}</td>
                     <td className="p-3 text-center font-mono font-bold">{item.total}</td>
                     <td className="p-3 text-center font-mono text-emerald-600 font-bold">{item.completed}</td>
@@ -645,8 +1702,13 @@ export default function ReportsView({ db, onNavigateToTask }: ReportsViewProps) 
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {currentReportData.data.map((item: any) => (
-                  <tr key={item.id} className="hover:bg-slate-50/50">
-                    <td className="p-3 font-bold text-slate-905">{item.name}</td>
+                  <tr 
+                    key={item.id} 
+                    className="hover:bg-blue-50/50 cursor-pointer transition-colors"
+                    onClick={() => setSelectedEmployeeId(item.id)}
+                    title="Нажмите, чтобы открыть карточку исполнителя и посмотреть работу по поручениям"
+                  >
+                    <td className="p-3 font-bold text-blue-600 hover:underline">{item.name}</td>
                     <td className="p-3 text-slate-500 font-mono text-3xs font-normal">{item.role} ({item.department})</td>
                     <td className="p-3 text-center font-mono font-bold">{item.total}</td>
                     <td className="p-3 text-center font-mono text-emerald-600 font-bold">{item.completed}</td>
@@ -675,8 +1737,13 @@ export default function ReportsView({ db, onNavigateToTask }: ReportsViewProps) 
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {currentReportData.data.map((item: any) => (
-                  <tr key={item.id} className="hover:bg-slate-50/50">
-                    <td className="p-3 font-bold text-slate-900">{item.name}</td>
+                  <tr 
+                    key={item.id} 
+                    className="hover:bg-blue-50/50 cursor-pointer transition-colors"
+                    onClick={() => setSelectedManagerId(item.id)}
+                    title="Нажмите, чтобы открыть карточку руководителя и посмотреть его поручения"
+                  >
+                    <td className="p-3 font-bold text-blue-600 hover:underline">{item.name}</td>
                     <td className="p-3 text-slate-500">{item.role}</td>
                     <td className="p-3 text-center font-mono font-bold">{item.total}</td>
                     <td className="p-3 text-center font-mono text-emerald-600 font-bold">{item.completed}</td>
@@ -703,8 +1770,13 @@ export default function ReportsView({ db, onNavigateToTask }: ReportsViewProps) 
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {currentReportData.data.map((item: any, index: number) => (
-                  <tr key={index} className="hover:bg-slate-50/50">
-                    <td className="p-3 font-bold text-slate-900">{item.name}</td>
+                  <tr 
+                    key={index} 
+                    className="hover:bg-blue-50/50 cursor-pointer transition-colors"
+                    onClick={() => setSelectedCategoryId(item.id)}
+                    title="Нажмите, чтобы открыть карточку категории и посмотреть ее поручения"
+                  >
+                    <td className="p-3 font-bold text-blue-600 hover:underline">{item.name}</td>
                     <td className="p-3 text-center font-mono font-bold">{item.total}</td>
                     <td className="p-3 text-center font-mono text-emerald-600 font-bold">{item.completed}</td>
                     <td className="p-3 text-center font-mono text-rose-600 font-bold">{item.overdue}</td>
@@ -730,8 +1802,13 @@ export default function ReportsView({ db, onNavigateToTask }: ReportsViewProps) 
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {currentReportData.data.map((item: any, idx: number) => (
-                  <tr key={idx} className="hover:bg-slate-50/50">
-                    <td className="p-3 font-bold text-slate-900">{item.name}</td>
+                  <tr 
+                    key={idx} 
+                    className="hover:bg-blue-50/50 cursor-pointer transition-colors"
+                    onClick={() => setSelectedSourceId(item.id)}
+                    title="Нажмите, чтобы открыть карточку источника и посмотреть его поручения"
+                  >
+                    <td className="p-3 font-bold text-blue-600 hover:underline">{item.name}</td>
                     <td className="p-3 text-center font-mono font-bold">{item.total}</td>
                     <td className="p-3 text-center font-mono text-emerald-600 font-bold">{item.completed}</td>
                     <td className="p-3 text-center font-mono text-rose-600 font-bold">{item.overdue}</td>
@@ -842,7 +1919,16 @@ export default function ReportsView({ db, onNavigateToTask }: ReportsViewProps) 
                     title="Нажмите, чтобы открыть поручение"
                   >
                     <td className="p-3 font-mono font-bold text-slate-500">{item.stationCode}</td>
-                    <td className="p-3 font-bold text-slate-900">{item.stationName}</td>
+                    <td 
+                      className="p-3 font-bold text-blue-600 hover:underline cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedStationCode(item.stationCode);
+                      }}
+                      title="Нажмите, чтобы открыть подробную карточку станции"
+                    >
+                      {item.stationName}
+                    </td>
                     <td className="p-3">
                       <div>{item.stationChief || "ДС не назначен"}</div>
                       <div className="text-slate-400 text-4xs font-mono font-normal">{item.phone}</div>
@@ -894,6 +1980,13 @@ export default function ReportsView({ db, onNavigateToTask }: ReportsViewProps) 
           </div>
         )}
       </div>
+
+      {/* Render Details Modals */}
+      {renderStationModal()}
+      {renderEmployeeModal()}
+      {renderManagerModal()}
+      {renderCategoryModal()}
+      {renderSourceModal()}
     </div>
   );
 }
