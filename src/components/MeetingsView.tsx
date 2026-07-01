@@ -37,6 +37,17 @@ export default function MeetingsView({ db, addMeeting, updateMeeting, deleteMeet
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraTarget, setCameraTarget] = useState<"create" | "edit">("create");
   const [viewerFile, setViewerFile] = useState<Attachment | null>(null);
+  const [selectedMeetingDetail, setSelectedMeetingDetail] = useState<Meeting | null>(null);
+  const [activeSubTab, setActiveSubTab] = useState<"active" | "archive">("active");
+
+  const isPastMeeting = (meet: Meeting) => {
+    const now = new Date();
+    const nowMs = now.getTime();
+    const meetDateTime = new Date(`${meet.date}T${meet.time}:00`);
+    const startMs = meetDateTime.getTime();
+    const oneHourLaterMs = startMs + 60 * 60 * 1000;
+    return nowMs >= oneHourLaterMs;
+  };
 
   const handleCameraCapture = (fileName: string, dataUrl: string) => {
     const newAtt: Attachment = {
@@ -177,7 +188,7 @@ export default function MeetingsView({ db, addMeeting, updateMeeting, deleteMeet
       date: date || getTodayStr(),
       time: time || "09:00",
       leader: leader.trim() || "Не указан",
-      description: description.trim() || "Описание отсутствует",
+      description: description.trim() || "",
       attachments
     });
     
@@ -208,12 +219,16 @@ export default function MeetingsView({ db, addMeeting, updateMeeting, deleteMeet
       date: editDate || getTodayStr(),
       time: editTime || "09:00",
       leader: editLeader.trim() || "Не указан",
-      description: editDescription.trim() || "Описание отсутствует",
+      description: editDescription.trim() || "",
       attachments: editAttachments
     });
 
     setEditingMeeting(null);
   };
+
+  const activeMeetings = db.meetings.filter(meet => !isPastMeeting(meet));
+  const archivedMeetings = db.meetings.filter(meet => isPastMeeting(meet));
+  const currentMeetingsList = activeSubTab === "active" ? activeMeetings : archivedMeetings;
 
   return (
     <div className="space-y-6" id="meetings-view-container">
@@ -229,6 +244,39 @@ export default function MeetingsView({ db, addMeeting, updateMeeting, deleteMeet
         >
           <Plus className="w-4 h-4" />
           Запланировать селектор
+        </button>
+      </div>
+
+      {/* Sub-tabs for separating active and completed (archived) meetings */}
+      <div className="flex border-b border-slate-200 gap-6" id="meetings-sub-tabs">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab("active")}
+          className={`pb-3 text-xs font-extrabold transition-all relative cursor-pointer ${
+            activeSubTab === "active"
+              ? "text-blue-600 font-black"
+              : "text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          Предстоящие и текущие ({activeMeetings.length})
+          {activeSubTab === "active" && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full" />
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab("archive")}
+          className={`pb-3 text-xs font-extrabold transition-all relative cursor-pointer ${
+            activeSubTab === "archive"
+              ? "text-blue-600 font-black"
+              : "text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          Архив завершенных ({archivedMeetings.length})
+          {activeSubTab === "archive" && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full" />
+          )}
         </button>
       </div>
 
@@ -371,60 +419,65 @@ export default function MeetingsView({ db, addMeeting, updateMeeting, deleteMeet
       )}
 
       {/* Grid listing all scheduled meetings */}
-      <div className="grid grid-cols-1 gap-4 w-full" id="meetings-cards-grid">
-        {db.meetings.length === 0 ? (
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full" id="meetings-cards-grid">
+        {currentMeetingsList.length === 0 ? (
           <div className="col-span-full bg-white p-10 text-center rounded-xl border border-slate-200 text-slate-400 font-medium">
-            Запланированные совещания отсутствуют.
+            {activeSubTab === "active" 
+              ? "Предстоящие селекторные совещания отсутствуют." 
+              : "Архив завершенных совещаний пуст."}
           </div>
         ) : (
-          [...db.meetings]
+          [...currentMeetingsList]
             .sort((a, b) => {
-              const now = new Date();
-              const nowMs = now.getTime();
-              
-              const getGroup = (meet: Meeting) => {
-                const meetDateTime = new Date(`${meet.date}T${meet.time}:00`);
-                const startMs = meetDateTime.getTime();
-                const oneHourLaterMs = startMs + 60 * 60 * 1000;
-                if (nowMs >= oneHourLaterMs) {
-                  return 2; // Group 2: Over / Archived (1 hour or more after start)
-                }
-                return 1; // Group 1: Upcoming or active (less than 1 hour since start)
-              };
-
-              const groupA = getGroup(a);
-              const groupB = getGroup(b);
-
-              if (groupA !== groupB) {
-                return groupA - groupB; // Group 1 first, Group 2 last
-              }
-
               const timeA = new Date(`${a.date}T${a.time}:00`).getTime();
               const timeB = new Date(`${b.date}T${b.time}:00`).getTime();
-              return timeA - timeB;
+              if (activeSubTab === "active") {
+                return timeA - timeB; // Earliest upcoming meeting first
+              } else {
+                return timeB - timeA; // Latest completed meeting first (descending)
+              }
             })
             .map(meet => {
-              const hasPast = new Date().getTime() >= new Date(`${meet.date}T${meet.time}:00`).getTime() + 60 * 60 * 1000;
+              const hasPast = isPastMeeting(meet);
 
               return (
-                <div key={meet.id} className="bg-slate-50/90 border border-slate-300 shadow-sm rounded-xl flex flex-col justify-between overflow-hidden hover:shadow-md hover:border-slate-455 transition-all duration-200" id={`meet-card-${meet.id}`}>
-                  {/* Card head */}
-                  <div className="p-4 bg-slate-50 border-b border-slate-150 flex justify-between items-center text-xs font-semibold">
-                    <span className={`px-2 py-0.5 rounded font-bold font-mono ${
-                      hasPast ? "bg-slate-250 text-slate-500" : "bg-amber-100 text-amber-800 animate-pulse"
-                    }`}>
-                      {formatDate(meet.date)} | в {meet.time}
-                    </span>
-                    <div className="flex items-center gap-1.5">
+                <div 
+                  key={meet.id} 
+                  onClick={() => setSelectedMeetingDetail(meet)}
+                  className="bg-slate-50/90 border border-slate-300 shadow-xs rounded-xl flex flex-col justify-between overflow-hidden hover:shadow-md hover:border-blue-400 transition-all duration-200 cursor-pointer text-left" 
+                  id={`meet-card-${meet.id}`}
+                >
+                  {/* Compact Header: Date, time, chairman and screenshot indicators in one row */}
+                  <div className="p-3 bg-slate-50 border-b border-slate-150 flex justify-between items-center text-[10px] font-semibold gap-1 shrink-0">
+                    <div className="flex flex-wrap items-center gap-1.5 text-slate-700 min-w-0">
+                      <span className={`px-1.5 py-0.5 rounded font-bold font-mono shrink-0 ${
+                        hasPast ? "bg-slate-200 text-slate-500" : "bg-amber-100 text-amber-800"
+                      }`}>
+                        {formatDate(meet.date)} {meet.time}
+                      </span>
+                      <span className="truncate text-slate-600 max-w-[80px]" title={`Председатель: ${meet.leader}`}>
+                        • 👤 {meet.leader}
+                      </span>
+                      {meet.attachments && meet.attachments.length > 0 && (
+                        <span className="inline-flex items-center gap-0.5 px-1 py-0.2 bg-blue-50 text-blue-700 rounded text-[9px] shrink-0 font-bold" title={`Материалы к селектору: ${meet.attachments.length} файл(ов)`}>
+                          📎 {meet.attachments.length}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-0.5 shrink-0">
                       <button
-                        onClick={() => startEditingMeeting(meet)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startEditingMeeting(meet);
+                        }}
                         className="text-slate-400 hover:text-indigo-600 transition-colors p-1 cursor-pointer"
                         title="Редактировать"
                       >
-                        <Pencil className="w-4 h-4" />
+                        <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           if (confirm(`Удалить совещание: "${meet.theme}"?`)) {
                             deleteMeeting(meet.id);
                           }
@@ -432,53 +485,30 @@ export default function MeetingsView({ db, addMeeting, updateMeeting, deleteMeet
                         className="text-slate-400 hover:text-red-500 transition-colors p-1 cursor-pointer"
                         title="Удалить"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
 
                   {/* Body content */}
-                  <div className="p-4 space-y-3 flex-1">
-                    <h3 className="font-bold text-slate-900 border-none text-xs leading-relaxed line-clamp-2">
-                      {meet.theme}
-                    </h3>
-
-                    <div className="flex items-center gap-1 text-[10px] text-slate-550 font-bold font-mono">
-                      <User className="w-3.5 h-3.5 text-blue-500" />
-                      Председатель: {meet.leader}
+                  <div className="p-3 space-y-2 flex-1 flex flex-col justify-between">
+                    <div className="space-y-1.5">
+                      <h3 className="font-bold text-slate-900 border-none text-[11px] leading-snug line-clamp-2" title={meet.theme}>
+                        {meet.theme}
+                      </h3>
+                      {meet.description && meet.description.trim() !== "Описание отсутствует" && meet.description.trim() !== "" && (
+                        <p className="text-[10px] text-slate-500 leading-normal font-medium whitespace-pre-wrap line-clamp-3 bg-white p-2 rounded border border-slate-100">
+                          {meet.description}
+                        </p>
+                      )}
                     </div>
-
-                    <p className="text-3xs text-slate-500 leading-normal font-medium whitespace-pre-wrap line-clamp-4 bg-slate-50/50 p-2.5 rounded-lg border border-slate-100">
-                      {meet.description || "Повестка заготовлена."}
-                    </p>
-
-                    {/* Meeting Attachments list */}
-                    {meet.attachments && meet.attachments.length > 0 && (
-                      <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                        <span className="block text-[9px] text-slate-400 uppercase font-bold flex items-center gap-1">
-                          <Paperclip className="w-3 h-3 text-blue-500" /> Материалы к селектору ({meet.attachments.length}):
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {meet.attachments.map(att => (
-                            <button
-                              key={att.id}
-                              type="button"
-                              onClick={() => att.fileData && setViewerFile(att)}
-                              className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded flex items-center gap-1.5 cursor-pointer transition-all border outline-none ${
-                                att.fileData 
-                                  ? "bg-blue-50 border-blue-200 hover:bg-indigo-50 hover:border-indigo-200 text-blue-800 hover:text-indigo-900" 
-                                  : "bg-slate-50 border-slate-200 text-slate-450 cursor-not-allowed"
-                              }`}
-                              title={att.fileData ? "Нажмите для просмотра в браузере" : "Файл доступен только по протоколу"}
-                            >
-                              <Paperclip className="w-2.5 h-2.5 shrink-0 text-blue-500" />
-                              <span className={att.fileData ? "underline truncate max-w-[120px]" : "truncate max-w-[120px]"}>{att.fileName}</span>
-                              {att.size && <span className="font-sans font-normal text-[8px] text-slate-400">({att.size})</span>}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    
+                    <div className="text-[9px] text-blue-600 font-bold pt-1.5 border-t border-slate-100/50 mt-auto flex justify-between items-center">
+                      <span>Подробнее...</span>
+                      {meet.attachments && meet.attachments.length > 0 && (
+                        <span className="text-slate-400 font-mono">Файлов: {meet.attachments.length}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -782,6 +812,121 @@ export default function MeetingsView({ db, addMeeting, updateMeeting, deleteMeet
                 className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold p-2 px-5 rounded-lg cursor-pointer"
               >
                 Закрыть просмотрщик
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Selected Meeting Details Modal */}
+      {selectedMeetingDetail && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 z-50 backdrop-blur-xs flex items-center justify-center p-4 font-sans"
+          onClick={() => setSelectedMeetingDetail(null)}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-xl w-full max-w-xl border border-slate-100 overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+            id="meeting-details-modal"
+          >
+            {/* Header */}
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+                  <Calendar className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-sm">Детали селекторного совещания</h3>
+                  <p className="text-[10px] text-slate-500 font-semibold uppercase font-mono">
+                    📅 {formatDate(selectedMeetingDetail.date)} в {selectedMeetingDetail.time}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedMeetingDetail(null)} 
+                className="text-slate-400 hover:text-slate-650 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-5 space-y-4 overflow-y-auto max-h-[70vh]">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400">Тема совещания</span>
+                <h4 className="font-extrabold text-slate-900 text-sm mt-0.5 leading-snug">
+                  {selectedMeetingDetail.theme}
+                </h4>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pt-1">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Председатель</span>
+                  <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5 mt-1">
+                    👤 {selectedMeetingDetail.leader}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Статус проведения</span>
+                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full mt-1 ${
+                    new Date().getTime() >= new Date(`${selectedMeetingDetail.date}T${selectedMeetingDetail.time}:00`).getTime() + 60 * 60 * 1000
+                      ? "bg-slate-100 text-slate-600"
+                      : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  }`}>
+                    {new Date().getTime() >= new Date(`${selectedMeetingDetail.date}T${selectedMeetingDetail.time}:00`).getTime() + 60 * 60 * 1000
+                      ? "Завершено"
+                      : "Ожидается"}
+                  </span>
+                </div>
+              </div>
+
+              {selectedMeetingDetail.description && selectedMeetingDetail.description.trim() !== "" && (
+                <div className="pt-2">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Повестка и подробное описание</span>
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 text-xs text-slate-800 font-medium whitespace-pre-wrap mt-1 leading-relaxed">
+                    {selectedMeetingDetail.description}
+                  </div>
+                </div>
+              )}
+
+              {/* Attachments / Screenshots inside detail modal */}
+              {selectedMeetingDetail.attachments && selectedMeetingDetail.attachments.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <span className="block text-[10px] text-slate-400 uppercase font-bold">
+                    📎 Прикрепленные материалы ({selectedMeetingDetail.attachments.length}):
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedMeetingDetail.attachments.map(att => (
+                      <button
+                        key={att.id}
+                        type="button"
+                        onClick={() => att.fileData && setViewerFile(att)}
+                        className={`text-xs font-mono font-bold p-2.5 rounded-lg flex items-center gap-2 cursor-pointer transition-all border outline-none text-left ${
+                          att.fileData 
+                            ? "bg-blue-50/50 border-blue-200 hover:bg-blue-50 hover:border-blue-300 text-blue-900" 
+                            : "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"
+                        }`}
+                      >
+                        <Paperclip className="w-4 h-4 shrink-0 text-blue-500" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate underline text-[11px]">{att.fileName}</p>
+                          <p className="font-sans font-normal text-[9px] text-slate-400 mt-0.5">{att.size || "Файл"}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end shrink-0 rounded-b-xl">
+              <button
+                type="button"
+                onClick={() => setSelectedMeetingDetail(null)}
+                className="px-4 py-2 text-xs font-extrabold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+              >
+                Закрыть
               </button>
             </div>
           </div>

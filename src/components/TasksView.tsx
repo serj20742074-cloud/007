@@ -36,12 +36,17 @@ import {
   Clipboard
 } from "lucide-react";
 import CameraModal from "./CameraModal";
+import StylusDrawingModal from "./StylusDrawingModal";
 import { getTodayStr, formatDate, getTaskBgClass } from "../utils/date";
 
 interface TasksViewProps {
   db: AppDatabase;
   selectedTaskId: string | null;
   onSelectTask: (taskId: string | null) => void;
+  initialFilterStatus?: string;
+  initialFilterDeadline?: string;
+  initialFilterImportance?: string;
+  onClearInitialFilters?: () => void;
   // State modifications
   addTask: (task: Omit<Task, "id" | "status" | "attachments">, initialAttachments: Attachment[], selectedStationIds?: string[]) => string;
   updateTask: (id: string, updated: Partial<Task>, selectedStationIds?: string[]) => void;
@@ -60,6 +65,10 @@ export default function TasksView({
   db,
   selectedTaskId,
   onSelectTask,
+  initialFilterStatus,
+  initialFilterDeadline,
+  initialFilterImportance,
+  onClearInitialFilters,
   addTask,
   updateTask,
   deleteTask,
@@ -83,6 +92,30 @@ export default function TasksView({
   const [filterImportance, setFilterImportance] = useState<string>("ALL");
   const [filterDeadline, setFilterDeadline] = useState<string>("ALL"); // ALL, TODAY, OVERDUE, WEEK
   const [showFilters, setShowFilters] = useState(false);
+
+  // Synchronize initial filters from dashboard clicks
+  useEffect(() => {
+    let changed = false;
+    if (initialFilterStatus && initialFilterStatus !== "ALL") {
+      setFilterStatus(initialFilterStatus);
+      changed = true;
+    }
+    if (initialFilterDeadline && initialFilterDeadline !== "ALL") {
+      setFilterDeadline(initialFilterDeadline);
+      changed = true;
+    }
+    if (initialFilterImportance && initialFilterImportance !== "ALL") {
+      setFilterImportance(initialFilterImportance);
+      changed = true;
+    }
+    
+    if (changed) {
+      setShowFilters(true);
+      if (onClearInitialFilters) {
+        onClearInitialFilters();
+      }
+    }
+  }, [initialFilterStatus, initialFilterDeadline, initialFilterImportance, onClearInitialFilters]);
 
   // Modal / Creation flow states
   const [isCreating, setIsCreating] = useState(false);
@@ -174,6 +207,30 @@ export default function TasksView({
 
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraTarget, setCameraTarget] = useState<"task" | "progress" | "station" | "related">("task");
+  
+  const [isDrawingOpen, setIsDrawingOpen] = useState(false);
+  const [drawingTarget, setDrawingTarget] = useState<"new" | "edit" | "station" | "progress" | null>(null);
+
+  const handleDrawingSave = (dataUrl: string, fileName: string) => {
+    const newAtt: Attachment = {
+      id: "att-" + Math.random().toString(36).substring(2, 11),
+      fileName: fileName,
+      fileType: "png",
+      fileData: dataUrl,
+      size: "Эскиз"
+    };
+
+    if (drawingTarget === "new") {
+      setNewAttachments(prev => [...prev, newAtt]);
+    } else if (drawingTarget === "edit") {
+      setEditAttachments(prev => [...prev, newAtt]);
+    } else if (drawingTarget === "station") {
+      setStationAttachments(prev => [...prev, newAtt]);
+    } else if (drawingTarget === "progress") {
+      setProgressAttachments(prev => [...prev, newAtt]);
+    }
+  };
+
   const [viewerFile, setViewerFile] = useState<Attachment | null>(null);
   const setImageViewerUrl = (url: string | null) => {
     if (url) {
@@ -287,12 +344,12 @@ export default function TasksView({
     }
   };
 
-  // Automatically select first task if nothing selected and screen space permits
-  useEffect(() => {
-    if (!selectedTaskId && db.tasks.length > 0) {
-      onSelectTask(db.tasks[0].id);
-    }
-  }, []);
+  // Automatically select first task if nothing selected and screen space permits - commented out per user request to always open list initially
+  // useEffect(() => {
+  //   if (!selectedTaskId && db.tasks.length > 0) {
+  //     onSelectTask(db.tasks[0].id);
+  //   }
+  // }, []);
 
   // Filter logic
   const filteredTasks = db.tasks.filter(t => {
@@ -331,7 +388,13 @@ export default function TasksView({
     if (filterManager !== "ALL" && t.managerId !== filterManager) return false;
 
     // 7. Importance Filter
-    if (filterImportance !== "ALL" && t.importance !== filterImportance) return false;
+    if (filterImportance !== "ALL") {
+      if (filterImportance === ImportanceLevel.SpecialControl) {
+        if (!t.specialControl && t.importance !== ImportanceLevel.SpecialControl) return false;
+      } else if (t.importance !== filterImportance) {
+        return false;
+      }
+    }
 
     // 8. Deadline Filter
     if (filterDeadline !== "ALL") {
@@ -405,7 +468,7 @@ export default function TasksView({
     const createdId = addTask({
       type: newType,
       title: newTitle.trim() || "Без наименования",
-      text: newText.trim() || "Описание поручения отсутствует",
+      text: newText.trim() || "",
       categoryId: newCategoryId || (db.categories[0]?.id || ""),
       sourceId: newSourceId || (db.sources[0]?.id || ""),
       managerId: newManagerId || (db.managers[0]?.id || ""),
@@ -464,7 +527,7 @@ export default function TasksView({
     updateTask(editingTask.id, {
       type: editType,
       title: editTitle.trim() || "Без наименования",
-      text: editText.trim() || "Описание поручения отсутствует",
+      text: editText.trim() || "",
       categoryId: editCategoryId || (db.categories[0]?.id || ""),
       sourceId: editSourceId || (db.sources[0]?.id || ""),
       managerId: editManagerId || (db.managers[0]?.id || ""),
@@ -1184,7 +1247,19 @@ export default function TasksView({
                       </div>
 
                       <div className="sm:col-span-3">
-                        <label className="block text-slate-500 mb-0.5">Комментарий / Примечание</label>
+                        <div className="flex justify-between items-center mb-0.5">
+                          <label className="block text-slate-500">Комментарий / Примечание</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDrawingTarget("station");
+                              setIsDrawingOpen(true);
+                            }}
+                            className="text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-extrabold flex items-center gap-1 transition-colors cursor-pointer"
+                          >
+                            <Pencil className="w-3 h-3" /> Нарисовать стилусом
+                          </button>
+                        </div>
                         <textarea
                           placeholder="Текст отчета, списки сотрудников..."
                           value={stationComment}
@@ -1299,7 +1374,19 @@ export default function TasksView({
 
               {/* Progress Add Report Form */}
               <form onSubmit={submitProgressReport} onPaste={(e) => handleOnPasteCapture(e, setProgressAttachments)} className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2">
-                <p className="text-[10px] font-bold text-slate-650">Опубликовать форму исполнения / комментарий отдела:</p>
+                <div className="flex justify-between items-center">
+                  <p className="text-[10px] font-bold text-slate-650">Опубликовать форму исполнения / комментарий отдела:</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDrawingTarget("progress");
+                      setIsDrawingOpen(true);
+                    }}
+                    className="text-[9px] bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-extrabold flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <Pencil className="w-2.5 h-2.5" /> Нарисовать стилусом
+                  </button>
+                </div>
                 <div className="flex gap-2">
                   <textarea
                     placeholder="Какая работа проведена по поручению? Опишите ход..."
@@ -1611,7 +1698,19 @@ export default function TasksView({
 
                 {/* Text Description */}
                 <div className="md:col-span-3">
-                  <label className="block text-slate-500 mb-0.5">Подробный текст поручения / Решение совещания</label>
+                  <div className="flex justify-between items-center mb-0.5">
+                    <label className="block text-slate-500">Подробный текст поручения / Решение совещания</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDrawingTarget("new");
+                        setIsDrawingOpen(true);
+                      }}
+                      className="text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-extrabold flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <Pencil className="w-3 h-3" /> Нарисовать стилусом
+                    </button>
+                  </div>
                   <textarea
                     placeholder="Напишите подробный перечень действий, критерии успешности..."
                     value={newText}
@@ -1971,7 +2070,19 @@ export default function TasksView({
 
                 {/* Text Description */}
                 <div className="md:col-span-3">
-                  <label className="block text-slate-500 mb-0.5">Подробный текст поручения / Решение совещания</label>
+                  <div className="flex justify-between items-center mb-0.5">
+                    <label className="block text-slate-500">Подробный текст поручения / Решение совещания</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDrawingTarget("edit");
+                        setIsDrawingOpen(true);
+                      }}
+                      className="text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-extrabold flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <Pencil className="w-3 h-3" /> Нарисовать стилусом
+                    </button>
+                  </div>
                   <textarea
                     placeholder="Описание поручения..."
                     value={editText}
@@ -2255,6 +2366,14 @@ export default function TasksView({
           isOpen={isCameraOpen}
           onClose={() => setIsCameraOpen(false)}
           onCapture={handleCameraCapture}
+        />
+      )}
+
+      {isDrawingOpen && (
+        <StylusDrawingModal
+          isOpen={isDrawingOpen}
+          onClose={() => setIsDrawingOpen(false)}
+          onSave={handleDrawingSave}
         />
       )}
 

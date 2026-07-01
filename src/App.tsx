@@ -37,6 +37,11 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+  // States to hold initial filters from dashboard card navigation
+  const [dashboardFilterStatus, setDashboardFilterStatus] = useState<string>("ALL");
+  const [dashboardFilterDeadline, setDashboardFilterDeadline] = useState<string>("ALL");
+  const [dashboardFilterImportance, setDashboardFilterImportance] = useState<string>("ALL");
   
   // Theme state
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
@@ -181,7 +186,24 @@ export default function App() {
   };
 
   const navigateToTab = (tabId: string) => {
+    if (tabId === "tasks") {
+      setSelectedTaskId(null);
+    }
     setActiveTab(tabId);
+  };
+
+  const navigateToTasksWithFilter = (filters: { status?: string; deadline?: string; importance?: string }) => {
+    setDashboardFilterStatus(filters.status || "ALL");
+    setDashboardFilterDeadline(filters.deadline || "ALL");
+    setDashboardFilterImportance(filters.importance || "ALL");
+    setSelectedTaskId(null);
+    setActiveTab("tasks");
+  };
+
+  const handleClearInitialFilters = () => {
+    setDashboardFilterStatus("ALL");
+    setDashboardFilterDeadline("ALL");
+    setDashboardFilterImportance("ALL");
   };
 
   // Global search filtering mechanism (Section 16)
@@ -409,7 +431,7 @@ export default function App() {
               <button
                 key={tab.id}
                 onClick={() => {
-                  setActiveTab(tab.id);
+                  navigateToTab(tab.id);
                   setIsSidebarOpen(false); // Auto close sidebar drawer on tablet click
                 }}
                 className={`flex items-center gap-3 w-full p-2.5 rounded-lg text-xs font-bold transition-all text-left cursor-pointer ${
@@ -471,6 +493,7 @@ export default function App() {
             db={db} 
             onNavigateToTask={navigateToSpecificTask}
             onNavigateToTab={navigateToTab}
+            onNavigateToTasksWithFilter={navigateToTasksWithFilter}
             onNavigateToMeeting={navigateToSpecificMeeting}
             onNavigateToNote={navigateToSpecificNote}
           />
@@ -481,6 +504,10 @@ export default function App() {
             db={db}
             selectedTaskId={selectedTaskId}
             onSelectTask={setSelectedTaskId}
+            initialFilterStatus={dashboardFilterStatus}
+            initialFilterDeadline={dashboardFilterDeadline}
+            initialFilterImportance={dashboardFilterImportance}
+            onClearInitialFilters={handleClearInitialFilters}
             addTask={store.addTask}
             updateTask={store.updateTask}
             deleteTask={store.deleteTask}

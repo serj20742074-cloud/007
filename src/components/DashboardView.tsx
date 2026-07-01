@@ -23,6 +23,7 @@ interface DashboardViewProps {
   db: AppDatabase;
   onNavigateToTask: (taskId: string) => void;
   onNavigateToTab: (tabId: string) => void;
+  onNavigateToTasksWithFilter?: (filters: { status?: string; deadline?: string; importance?: string }) => void;
   onNavigateToMeeting?: (meetingId: string) => void;
   onNavigateToNote?: (noteId: string) => void;
 }
@@ -31,6 +32,7 @@ export default function DashboardView({
   db, 
   onNavigateToTask, 
   onNavigateToTab,
+  onNavigateToTasksWithFilter,
   onNavigateToMeeting,
   onNavigateToNote
 }: DashboardViewProps) {
@@ -110,7 +112,7 @@ export default function DashboardView({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Active Tasks Card */}
         <div 
-          onClick={() => onNavigateToTab("tasks")}
+          onClick={() => onNavigateToTasksWithFilter ? onNavigateToTasksWithFilter({ status: "В работе" }) : onNavigateToTab("tasks")}
           id="stat-card-active"
           className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs hover:border-blue-300 transition-all cursor-pointer flex items-center space-x-4"
         >
@@ -125,7 +127,7 @@ export default function DashboardView({
 
         {/* Due Today Card */}
         <div 
-          onClick={() => onNavigateToTab("tasks")}
+          onClick={() => onNavigateToTasksWithFilter ? onNavigateToTasksWithFilter({ deadline: "TODAY" }) : onNavigateToTab("tasks")}
           id="stat-card-due-today"
           className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs hover:border-amber-300 transition-all cursor-pointer flex items-center space-x-4"
         >
@@ -140,7 +142,7 @@ export default function DashboardView({
 
         {/* Overdue Card */}
         <div 
-          onClick={() => onNavigateToTab("tasks")}
+          onClick={() => onNavigateToTasksWithFilter ? onNavigateToTasksWithFilter({ deadline: "OVERDUE" }) : onNavigateToTab("tasks")}
           id="stat-card-overdue"
           className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs hover:border-rose-300 transition-all cursor-pointer flex items-center space-x-4"
         >
@@ -155,7 +157,7 @@ export default function DashboardView({
 
         {/* Special Control Card */}
         <div 
-          onClick={() => onNavigateToTab("tasks")}
+          onClick={() => onNavigateToTasksWithFilter ? onNavigateToTasksWithFilter({ importance: "Особый контроль" }) : onNavigateToTab("tasks")}
           id="stat-card-special-control"
           className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs hover:border-indigo-300 transition-all cursor-pointer flex items-center space-x-4"
         >

@@ -174,7 +174,7 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
 
     addNote({
       title: title.trim() || "Без названия",
-      text: text.trim() || "Текст отсутствует",
+      text: text.trim() || "",
       reminderDate: reminderDate || undefined,
       reminderTime: reminderTime || undefined,
       attachments,
@@ -197,7 +197,7 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
 
     updateNote(editingNote.id, {
       title: editTitle.trim() || "Без названия",
-      text: editText.trim() || "Текст отсутствует",
+      text: editText.trim() || "",
       reminderDate: editReminderDate || undefined,
       reminderTime: editReminderTime || undefined,
       attachments: editAttachments,
