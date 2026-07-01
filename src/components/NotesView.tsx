@@ -35,6 +35,12 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
 
   // Filter state for notes status (all, active, completed)
   const [filter, setFilter] = useState<"all" | "active" | "completed">("active");
+  const [selectedNoteDetail, setSelectedNoteDetail] = useState<Note | null>(null);
+  const [zoom, setZoom] = useState(1);
+
+  React.useEffect(() => {
+    setZoom(1);
+  }, [viewerFile]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
@@ -456,7 +462,8 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
               return (
                 <div 
                   key={note.id} 
-                  className={`rounded-xl border flex flex-col justify-between overflow-hidden relative transition-all duration-200 hover:shadow-md ${
+                  onClick={() => setSelectedNoteDetail(note)}
+                  className={`rounded-xl border flex flex-col justify-between overflow-hidden relative transition-all duration-200 hover:shadow-md cursor-pointer hover:border-blue-400 ${
                     note.isCompleted 
                       ? "border-emerald-250 bg-emerald-50/15 opacity-80 shadow-3xs hover:border-emerald-305" 
                       : "bg-slate-50/90 border-slate-300 shadow-sm hover:border-slate-450"
@@ -487,7 +494,8 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
                       <div className="flex items-center gap-1 absolute top-3.5 right-3">
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setEditingNote(note);
                             setEditTitle(note.title);
                             setEditText(note.text);
@@ -503,7 +511,8 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             if (confirm(`Удалить заметку "${note.title}"?`)) {
                               deleteNote(note.id);
                             }
@@ -532,10 +541,13 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
                           {note.attachments.map(att => {
                             const isImage = att.fileData && (att.fileType === "jpg" || att.fileType === "jpeg" || att.fileType === "png" || att.fileData?.startsWith("data:image"));
                             return (
-                              <div key={att.id} className="flex flex-col gap-1">
+                              <div key={att.id} className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
                                 <button
                                   type="button"
-                                  onClick={() => att.fileData && setViewerFile(att)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (att.fileData) setViewerFile(att);
+                                  }}
                                   className="text-[10px] bg-slate-50 border border-slate-200 hover:bg-indigo-50 hover:border-indigo-200 text-slate-800 hover:text-indigo-900 font-mono font-semibold px-2 py-1 rounded flex items-center gap-1.5 cursor-pointer text-left transition-all"
                                   title="Нажмите для просмотра в браузере"
                                 >
@@ -549,7 +561,10 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
                                     alt={att.fileName} 
                                     className="w-full max-h-36 object-cover rounded-lg border border-slate-205 mt-0.5 cursor-pointer hover:opacity-90 transition-opacity" 
                                     referrerPolicy="no-referrer"
-                                    onClick={() => setViewerFile(att)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setViewerFile(att);
+                                    }}
                                   />
                                 )}
                               </div>
@@ -570,7 +585,10 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
                     </span>
                     <button
                       type="button"
-                      onClick={() => updateNote(note.id, { isCompleted: !note.isCompleted })}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        updateNote(note.id, { isCompleted: !note.isCompleted });
+                      }}
                       className={`text-[10px] font-bold py-1.5 px-3 rounded-lg flex items-center gap-1 cursor-pointer transition-all ${
                         note.isCompleted
                           ? "bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-300"
@@ -718,7 +736,7 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
                 </button>
                 <button
                   type="submit"
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 px-5 rounded-lg cursor-pointer animate-pulse"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2 px-5 rounded-lg cursor-pointer"
                 >
                   Сохранить изменения
                 </button>
@@ -734,6 +752,157 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
           onClose={() => setIsCameraOpen(false)}
           onCapture={handleCameraCapture}
         />
+      )}
+
+      {/* Selected Note Details Modal */}
+      {selectedNoteDetail && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 z-50 backdrop-blur-xs flex items-center justify-center p-4 font-sans text-slate-800"
+          onClick={() => setSelectedNoteDetail(null)}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-xl w-full max-w-xl border border-slate-100 overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+            id="note-details-modal"
+          >
+            {/* Header */}
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center shrink-0 text-slate-900">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+                  <FileCheck className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-sm">Просмотр заметки</h3>
+                  <p className="text-[10px] text-slate-500 font-semibold uppercase font-mono">
+                    {selectedNoteDetail.reminderDate ? (
+                      <span className="flex items-center gap-1 text-amber-700">
+                        <Clock className="w-3 h-3 text-amber-600" /> Напоминание: {formatDate(selectedNoteDetail.reminderDate)} {selectedNoteDetail.reminderTime || ""}
+                      </span>
+                    ) : (
+                      "Памятка в блокноте"
+                    )}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSelectedNoteDetail(null)} 
+                className="text-slate-400 hover:text-slate-655 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div className="p-5 space-y-4 overflow-y-auto max-h-[70vh]">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400">Заголовок</span>
+                <h4 className="font-extrabold text-slate-900 text-sm mt-0.5 leading-snug">
+                  {selectedNoteDetail.title}
+                </h4>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pt-1">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Статус заметки</span>
+                  <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-0.75 rounded-full mt-1 ${
+                    selectedNoteDetail.isCompleted
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : "bg-amber-50 text-amber-700 border border-amber-250"
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${selectedNoteDetail.isCompleted ? "bg-emerald-500" : "bg-amber-500"}`}></span>
+                    {selectedNoteDetail.isCompleted ? "Отработано" : "В работе"}
+                  </span>
+                </div>
+                <div className="flex items-end justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updatedStatus = !selectedNoteDetail.isCompleted;
+                      updateNote(selectedNoteDetail.id, { isCompleted: updatedStatus });
+                      setSelectedNoteDetail({
+                        ...selectedNoteDetail,
+                        isCompleted: updatedStatus
+                      });
+                    }}
+                    className={`text-[10px] font-extrabold py-1.5 px-3 rounded-lg flex items-center gap-1 cursor-pointer transition-all ${
+                      selectedNoteDetail.isCompleted
+                        ? "bg-slate-200 hover:bg-slate-300 text-slate-700 border border-slate-300"
+                        : "bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-600 shadow-3xs"
+                    }`}
+                  >
+                    {selectedNoteDetail.isCompleted ? "Вернуть в работу" : "Отметить как Отработано"}
+                  </button>
+                </div>
+              </div>
+
+              {selectedNoteDetail.text && selectedNoteDetail.text.trim() !== "" && (
+                <div className="pt-2">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Содержание заметки</span>
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5 text-xs text-slate-800 font-medium whitespace-pre-wrap mt-1 leading-relaxed">
+                    {selectedNoteDetail.text}
+                  </div>
+                </div>
+              )}
+
+              {/* Attachments inside detail modal */}
+              {selectedNoteDetail.attachments && selectedNoteDetail.attachments.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <span className="block text-[10px] text-slate-400 uppercase font-bold">
+                    📎 Прикрепленные файлы ({selectedNoteDetail.attachments.length}):
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {selectedNoteDetail.attachments.map(att => (
+                      <button
+                        key={att.id}
+                        type="button"
+                        onClick={() => att.fileData && setViewerFile(att)}
+                        className={`text-xs font-mono font-bold p-2.5 rounded-lg flex items-center gap-2 cursor-pointer transition-all border outline-none text-left ${
+                          att.fileData 
+                            ? "bg-blue-50/50 border-blue-200 hover:bg-blue-50 hover:border-blue-300 text-blue-900" 
+                            : "bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed"
+                        }`}
+                      >
+                        <Paperclip className="w-4 h-4 shrink-0 text-blue-500" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate underline text-[11px]">{att.fileName}</p>
+                          <p className="font-sans font-normal text-[9px] text-slate-400 mt-0.5">{att.size || "Файл"}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end shrink-0 rounded-b-xl gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const note = selectedNoteDetail;
+                  setSelectedNoteDetail(null);
+                  setEditingNote(note);
+                  setEditTitle(note.title);
+                  setEditText(note.text);
+                  setEditReminderDate(note.reminderDate || "");
+                  setEditReminderTime(note.reminderTime || "");
+                  setEditAttachments(note.attachments || []);
+                  setEditIsCompleted(!!note.isCompleted);
+                }}
+                className="px-4 py-2 text-xs font-extrabold text-white bg-indigo-650 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer"
+              >
+                Редактировать
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedNoteDetail(null)}
+                className="px-4 py-2 text-xs font-extrabold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {viewerFile && (
@@ -771,7 +940,7 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
               </div>
               <button 
                 onClick={() => setViewerFile(null)} 
-                className="text-slate-400 hover:text-white transition-colors bg-slate-800 hover:bg-slate-755 p-1.5 rounded-lg cursor-pointer animate-none"
+                className="text-slate-400 hover:text-white transition-colors bg-slate-800 hover:bg-slate-755 p-1.5 rounded-lg cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -829,7 +998,7 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
                             <a 
                               href={viewerFile.fileData} 
                               download={viewerFile.fileName}
-                              className="bg-slate-800 hover:bg-slate-700 active:bg-slate-750 text-white text-[11px] font-bold py-2.5 px-4 rounded-lg transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+                              className="bg-slate-800 hover:bg-slate-700 active:bg-slate-755 text-white text-[11px] font-bold py-2.5 px-4 rounded-lg transition-all shadow-md cursor-pointer flex items-center gap-1.5"
                             >
                               📥 Скачать PDF файл
                             </a>
@@ -839,12 +1008,50 @@ export default function NotesView({ db, addNote, updateNote, deleteNote, renameA
                     );
                   } else if (isImg) {
                     return (
-                      <img 
-                        src={viewerFile.fileData} 
-                        alt={viewerFile.fileName}
-                        className="max-w-full max-h-full object-contain rounded-lg shadow-xl"
-                        referrerPolicy="no-referrer"
-                      />
+                      <div className="w-full h-full flex flex-col items-center justify-between gap-4 font-sans relative">
+                        {/* Zoom toolbar */}
+                        <div className="absolute top-2 right-2 bg-slate-900/95 border border-slate-700 rounded-lg p-1.5 px-3 flex items-center gap-3 z-10 shadow-lg text-xs font-bold text-white">
+                          <button
+                            type="button"
+                            onClick={() => setZoom(prev => Math.max(0.5, prev - 0.25))}
+                            className="bg-slate-850 hover:bg-slate-700 text-white w-6 h-6 rounded flex items-center justify-center cursor-pointer transition-colors border border-slate-700"
+                            title="Уменьшить"
+                          >
+                            -
+                          </button>
+                          <span className="font-mono min-w-[40px] text-center text-slate-200">
+                            {Math.round(zoom * 100)}%
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setZoom(prev => Math.min(4.0, prev + 0.25))}
+                            className="bg-slate-850 hover:bg-slate-700 text-white w-6 h-6 rounded flex items-center justify-center cursor-pointer transition-colors border border-slate-700"
+                            title="Увеличить"
+                          >
+                            +
+                          </button>
+                          <div className="w-px h-4 bg-slate-700" />
+                          <button
+                            type="button"
+                            onClick={() => setZoom(1.0)}
+                            className="bg-slate-850 hover:bg-slate-700 text-slate-200 px-2 py-0.5 rounded cursor-pointer transition-colors text-[10px] border border-slate-700"
+                            title="Сбросить масштаб"
+                          >
+                            Сбросить
+                          </button>
+                        </div>
+
+                        {/* Image canvas with zoom applied */}
+                        <div className="flex-1 w-full overflow-auto flex items-center justify-center p-4">
+                          <img 
+                            src={viewerFile.fileData} 
+                            alt={viewerFile.fileName}
+                            className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-xl transition-transform duration-200 origin-center"
+                            style={{ transform: `scale(${zoom})` }}
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      </div>
                     );
                   } else {
                     return (

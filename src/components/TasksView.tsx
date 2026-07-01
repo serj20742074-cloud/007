@@ -232,6 +232,11 @@ export default function TasksView({
   };
 
   const [viewerFile, setViewerFile] = useState<Attachment | null>(null);
+  const [zoom, setZoom] = useState(1);
+
+  useEffect(() => {
+    setZoom(1);
+  }, [viewerFile]);
   const setImageViewerUrl = (url: string | null) => {
     if (url) {
       setViewerFile({
@@ -2480,12 +2485,50 @@ export default function TasksView({
                     );
                   } else if (isImg) {
                     return (
-                      <img 
-                        src={viewerFile.fileData} 
-                        alt={viewerFile.fileName}
-                        className="max-w-full max-h-full object-contain rounded-lg shadow-xl"
-                        referrerPolicy="no-referrer"
-                      />
+                      <div className="w-full h-full flex flex-col items-center justify-between gap-4 font-sans relative">
+                        {/* Zoom toolbar */}
+                        <div className="absolute top-2 right-2 bg-slate-900/95 border border-slate-700 rounded-lg p-1.5 px-3 flex items-center gap-3 z-10 shadow-lg text-xs font-bold text-white">
+                          <button
+                            type="button"
+                            onClick={() => setZoom(prev => Math.max(0.5, prev - 0.25))}
+                            className="bg-slate-850 hover:bg-slate-700 text-white w-6 h-6 rounded flex items-center justify-center cursor-pointer transition-colors border border-slate-700"
+                            title="Уменьшить"
+                          >
+                            -
+                          </button>
+                          <span className="font-mono min-w-[40px] text-center text-slate-200">
+                            {Math.round(zoom * 100)}%
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setZoom(prev => Math.min(4.0, prev + 0.25))}
+                            className="bg-slate-850 hover:bg-slate-700 text-white w-6 h-6 rounded flex items-center justify-center cursor-pointer transition-colors border border-slate-700"
+                            title="Увеличить"
+                          >
+                            +
+                          </button>
+                          <div className="w-px h-4 bg-slate-700" />
+                          <button
+                            type="button"
+                            onClick={() => setZoom(1.0)}
+                            className="bg-slate-850 hover:bg-slate-700 text-slate-200 px-2 py-0.5 rounded cursor-pointer transition-colors text-[10px] border border-slate-700"
+                            title="Сбросить масштаб"
+                          >
+                            Сбросить
+                          </button>
+                        </div>
+
+                        {/* Image canvas with zoom applied */}
+                        <div className="flex-1 w-full overflow-auto flex items-center justify-center p-4">
+                          <img 
+                            src={viewerFile.fileData} 
+                            alt={viewerFile.fileName}
+                            className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-xl transition-transform duration-200 origin-center"
+                            style={{ transform: `scale(${zoom})` }}
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      </div>
                     );
                   } else {
                     return (
